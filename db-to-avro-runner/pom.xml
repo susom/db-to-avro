@@ -27,10 +27,9 @@
 
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>jobrunner</artifactId>
+  <artifactId>db-to-avro-runner</artifactId>
 
   <properties>
-    <vertx.version>3.7.0</vertx.version>
     <version.jopt.simple>5.0.4</version.jopt.simple>
     <docker.version>3.1.2</docker.version>
   </properties>
