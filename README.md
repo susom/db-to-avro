@@ -1,45 +1,33 @@
-## Database to Avro
+## Database Backups to Avro
 
 The goal of this project is to load database backups (eg. Oracle datapump exports, MS Sql Server .bak files) into a
 temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems. 
 
 ### Current Progress
 
-This application is in alpha status, and currently supports loading a MS SQL Server backup into a container. 
+This application is in alpha status, and currently supports loading a Microsoft SQL Server backup into a container. 
 
 ### Planned Features
 
 The application will eventually support:
-* Loading Oracle datapump exports and MS Sql Server backups into a docker container.
+* Loading Oracle datapump exports and Microsoft SQL Server backups into a docker container.
 
 * Selectively exporting schemas / tables within the loaded database as .avro files using various methods depending on the size of the source database: 
   
-  * Multi-threaded (per table) Avro creation using [Stride Util](https://github.com/susom/stride-util/blob/master/src/main/java/com/github/susom/stride/server/container/OracleEtl.java).
+  * Multi-threaded (table-level) Avro creation using [Stride Util](https://github.com/susom/stride-util/blob/master/src/main/java/com/github/susom/stride/server/container/OracleEtl.java).
   
-  * Multi-threaded Avro (per table) creation using [Apache Sqoop](https://sqoop.apache.org/) v1 in standalone mode. 
+  * Multi-threaded Avro (table-level) creation using [Apache Sqoop](https://sqoop.apache.org/) v1 in standalone mode. 
   
-  * Multi-threaded (row level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) v1 on a Hadoop cluster running in Google Cloud Dataproc.   
+  * Multi-threaded (row-level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) v1 on a Hadoop cluster running in Google Cloud Dataproc.   
 
-  * *(possible)* Multi-threaded (row level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) on a Hadoop cluster running in Docker / Kubernetes. 
+  * *(possible)* Multi-threaded (row-level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) on a Hadoop cluster running in Docker / Kubernetes. 
 
 ### Architecture
 
 Jobs are defined as an asynchronous functional expression using [RxJava2](https://github.com/ReactiveX/RxJava). 
 Different types of jobs can be chained together for more complex operations.
 
-The following example below does the following: 
-1. Creates a database docker container and starts it.
-2. Waits for the database to go online. 
-3. Executes an SQL script to prepare the database for the restore. 
-4. Introspects the backup file and creates SQL code for initiating the restore.
-5. Initiates the database restore in a new thread.
-6. Reports progress to the runner while the database is being restored.
-7. Executes an SQL script to clean up.
-8. Enumerates the tables with their row counts, stores the result in the Job.
-9. Stops and deletes the container. 
-
-During the entire operation, progress of the Job is recorded along with the percent complete during the database restore operation.
-
+Example: 
 ```java
 public static Completable Restore(DockerFns docker, DatabaseFns sql, Job job, JobLogger logger) {
 
@@ -78,6 +66,19 @@ public static Completable Restore(DockerFns docker, DatabaseFns sql, Job job, Jo
             .doOnComplete(() -> logger.log("Job complete!")));
   }
 ```
+
+The example above does the following: 
+1. Creates a database docker container and starts it.
+2. Waits for the database to go online. 
+3. Executes an SQL script to prepare the database for the restore. 
+4. Introspects the backup file and creates SQL code for initiating the restore.
+5. Initiates the database restore in a new thread.
+6. Reports progress to the runner while the database is being restored.
+7. Executes an SQL script to clean up.
+8. Enumerates the tables with their row counts, stores the result in the Job.
+9. Stops and deletes the container. 
+
+During the entire operation, progress of the Job is recorded along with the percent complete during the database restore operation.
 
 After the Job Runner finishes the above operation, the final result is marked as Success or Failed, and the Job is output as JSON for downstream systems. 
 
