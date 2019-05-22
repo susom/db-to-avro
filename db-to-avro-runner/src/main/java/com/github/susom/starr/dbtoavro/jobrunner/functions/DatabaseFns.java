@@ -15,9 +15,9 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.functions;
+package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
 import io.reactivex.Single;

@@ -15,20 +15,24 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.jobs;
+package com.github.susom.starr.dbtoavro.jobrunner.jobs;
 
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Job;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.DatabaseFns;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.DockerFns;
-import com.github.susom.starr.db_to_avro.jobrunner.runner.JobLogger;
-import com.github.susom.starr.db_to_avro.jobrunner.util.RetryWithDelay;
-import io.reactivex.Completable;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
+import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
+import io.reactivex.Maybe;
 import io.reactivex.schedulers.Schedulers;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
-public class SqlServer {
+public class Restore {
 
   /**
-   * Restores an SQL-Server database backup into a new container
+   * Restores a database backup into a docker container
    *
    * @param docker implementation of{@link DockerFns}
    * @param sql implementation of{@link DatabaseFns}
@@ -36,19 +40,21 @@ public class SqlServer {
    * @param logger job logger
    * @return Completable containing result or error
    */
-  public static Completable Restore(DockerFns docker, DatabaseFns sql, Job job, JobLogger logger) {
-    return docker.create().flatMapCompletable(containerId ->
+  public static Maybe<Result> run(DockerFns docker, DatabaseFns sql, Job job, JobLogger logger) {
+
+    return docker.create().flatMapMaybe(containerId ->
 
         docker.start(containerId)
-            .doOnComplete(() -> logger.log(String.format("Container %s started, waiting for database to boot", containerId)))
+            .doOnComplete(
+                () -> logger.log(
+                    String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
             .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(3, 2000)))
 
-            // Execute pre-sql commands
-            .andThen(sql.transact(job.getPreSql()))
+            .andThen(sql.transact(job.preSql))
             .doOnComplete(() -> logger.log("Database pre-sql completed"))
 
             .doOnComplete(() -> logger.log("Starting database restore"))
-            .andThen(sql.getRestoreSql(job.getDatabaseName(), job.getBackupFiles())
+            .andThen(sql.getRestoreSql(job.databaseName, Arrays.asList(job.backupFiles.split(",")))
                 .flatMapObservable(ddl ->
                     docker.execSqlShell(containerId, ddl)
                         .observeOn(Schedulers.io())))
@@ -56,21 +62,28 @@ public class SqlServer {
             .doOnNext(p -> logger.progress(p.getPercent(), 100)).ignoreElements()
             .doOnComplete(() -> logger.log("Restore completed"))
 
-            .andThen(sql.transact(job.getPostSql()))
+            .andThen(sql.transact(job.postSql))
             .doOnComplete(() -> logger.log("Database post-sql completed"))
 
             .doOnComplete(() -> logger.log("Introspecting schema"))
-            .andThen(sql.getTables(job.getDatabaseName()))
-            .doOnSuccess(job::setTables)
-            .ignoreElement()
+            .andThen(sql.getTables(job.databaseName))
+            .map(tables -> new Result(containerId, tables)));
 
-            .doOnComplete(() -> logger.log(String.format("Stopping container %s", containerId)))
-            .andThen(docker.stop(containerId))
+  }
 
-            .doOnComplete(() -> logger.log(String.format("Deleting container %s", containerId)))
-            .andThen(docker.destroy(containerId))
+  /**
+   * Encapsulates results of running the above fn
+   */
+  public static class Result {
 
-            .doOnComplete(() -> logger.log("Job complete!")));
+    String containerId;
+    List<Table> tables;
+
+    Result(String containerId, List<Table> tables) {
+      this.containerId = containerId;
+      this.tables = tables;
+    }
+
   }
 
 }

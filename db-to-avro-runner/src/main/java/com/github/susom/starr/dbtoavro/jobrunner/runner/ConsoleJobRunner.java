@@ -15,9 +15,9 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.runner;
+package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.database.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ConsoleJobRunner extends JobRunner implements JobLogger {
 
-  private static Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
 
   public ConsoleJobRunner(Config config, Job job) {
     super(config, job);

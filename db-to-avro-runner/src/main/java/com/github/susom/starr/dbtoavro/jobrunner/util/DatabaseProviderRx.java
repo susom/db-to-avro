@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.util;
+package com.github.susom.starr.dbtoavro.jobrunner.util;
 
 import com.github.susom.database.Config;
 import com.github.susom.database.Database;
@@ -50,9 +50,9 @@ import org.slf4j.LoggerFactory;
  * If you are calling this from a Vert.x context, be sure to subscribe and schedule these observables with {@link
  * io.vertx.reactivex.RxHelper#blockingScheduler(io.vertx.core.Vertx vertx)}
  *
- * This is a lazy provider for Database instances. It helps avoid allocating connection or transaction resources until
+ * <p>This is a lazy provider for Database instances. It helps avoid allocating connection or transaction resources until
  * (or if) we actually need a Database. As a consequence of this laziness, the underlying resources require explicit
- * cleanup by calling either commitAndClose() or rollbackAndClose().
+ * cleanup by calling either commitAndClose() or rollbackAndClose().</p>
  *
  * @author jmesterh
  * @author garricko
@@ -270,8 +270,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
   }
 
   /**
-   * Same as {@link #transactRx(DbCodeTyped<T>)}, but your code block can explicitly manage the behavior of the
-   * transaction.
+   * Same as above, but your code block can explicitly manage the behavior of the transaction.
    */
   public <T> Maybe<T> transactRx(final DbCodeTypedTx<T> code) {
     return Maybe.create(emitter -> {
@@ -660,7 +659,9 @@ public class DatabaseProviderRx implements Supplier<Database> {
     }
 
     @Override
-    public <T> Maybe<T> transactRx(DbCodeTyped<T> code) { return create().transactRx(code); }
+    public <T> Maybe<T> transactRx(DbCodeTyped<T> code) {
+      return create().transactRx(code);
+    }
 
     @Override
     public <T> Maybe<T> transactRx(DbCodeTypedTx<T> code) {

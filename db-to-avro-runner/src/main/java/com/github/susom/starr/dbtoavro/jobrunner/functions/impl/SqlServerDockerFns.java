@@ -15,12 +15,12 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.functions.impl;
+package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
-import com.github.susom.starr.db_to_avro.jobrunner.docker.ConsoleOutput;
-import com.github.susom.starr.db_to_avro.jobrunner.docker.DockerService;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.DockerFns;
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
@@ -45,14 +45,9 @@ public class SqlServerDockerFns implements DockerFns {
     this.mounts = mounts;
     this.image = config.getString("sqlserver.image", "mcr.microsoft.com/mssql/server:2017-latest");
     this.password = config.getStringOrThrow("sqlserver.password");
-    this.env = Arrays
-        .stream(config.getStringOrThrow("sqlserver.env").split("\\s*,\\s*"))
-        .collect(Collectors.toList());
+    this.env = Arrays.asList(config.getStringOrThrow("sqlserver.env").split("\\s*,\\s*"));
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Single<String> create() {
     return Single.create(emitter -> {
@@ -66,9 +61,6 @@ public class SqlServerDockerFns implements DockerFns {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Completable start(String containerId) {
     return Completable.create(emitter -> {
@@ -81,9 +73,6 @@ public class SqlServerDockerFns implements DockerFns {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Completable stop(String containerId) {
     return Completable.create(emitter -> {
@@ -96,9 +85,6 @@ public class SqlServerDockerFns implements DockerFns {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Completable destroy(String containerId) {
     return Completable.create(emitter -> {
@@ -111,9 +97,6 @@ public class SqlServerDockerFns implements DockerFns {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Observable<ConsoleOutput> execSqlShell(String containerId, String query) {
     return dockerService.exec(containerId,
@@ -124,9 +107,6 @@ public class SqlServerDockerFns implements DockerFns {
         "-Q", query);
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Completable healthCheck(String containerId) {
     return execSqlShell(containerId, "SELECT 1;")

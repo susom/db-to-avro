@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.docker.impl;
+package com.github.susom.starr.dbtoavro.jobrunner.docker.impl;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
@@ -31,9 +31,9 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
-import com.github.susom.starr.db_to_avro.jobrunner.docker.ConsoleOutput;
-import com.github.susom.starr.db_to_avro.jobrunner.docker.DockerService;
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
 import java.io.IOException;
@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
  */
 public class DockerServiceImpl implements DockerService {
 
-  private static Logger LOGGER = LoggerFactory.getLogger(DockerServiceImpl.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(DockerServiceImpl.class);
   private DockerClient dockerClient;
   private String socket;
 
@@ -66,9 +66,6 @@ public class DockerServiceImpl implements DockerService {
     connect();
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public String createContainer(final String image, final List<String> mounts, final List<String> env) {
     // Uses same '/host_path:/container_path' syntax as command line docker
@@ -94,9 +91,6 @@ public class DockerServiceImpl implements DockerService {
 
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public void startContainer(final String containerId) {
     dockerClient.startContainerCmd(containerId).exec();
@@ -104,24 +98,17 @@ public class DockerServiceImpl implements DockerService {
 
   /**
    * Stops a container with the given containerId
-   * @param containerId
    */
   @Override
   public void stopContainer(final String containerId) {
     dockerClient.stopContainerCmd(containerId).exec();
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public void removeContainer(final String containerId) {
     dockerClient.removeContainerCmd(containerId).exec();
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Observable<ConsoleOutput> exec(final String containerId, final String... cmd) {
     return Observable.create(emitter -> {
@@ -141,9 +128,6 @@ public class DockerServiceImpl implements DockerService {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Observable<ConsoleOutput> logs(final String containerId, boolean follow, int numberOfLines) {
     return Observable.create(emitter -> {
@@ -171,7 +155,6 @@ public class DockerServiceImpl implements DockerService {
         throw new IOException("Unknown docker stream");
     }
   }
-
 
   private ExecStartResultCallback getResultCallback(ObservableEmitter<ConsoleOutput> emitter) {
     return new ExecStartResultCallback() {
@@ -218,7 +201,5 @@ public class DockerServiceImpl implements DockerService {
       }
     }
   }
-
-
 
 }

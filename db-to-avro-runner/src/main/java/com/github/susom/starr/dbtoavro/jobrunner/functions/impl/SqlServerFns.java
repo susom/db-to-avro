@@ -15,17 +15,18 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.functions.impl;
+package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Table;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.DatabaseFns;
-import com.github.susom.starr.db_to_avro.jobrunner.util.DatabaseProviderRx;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.database.Config;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
 import io.reactivex.Single;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,7 @@ import org.slf4j.LoggerFactory;
 // TODO: Extract interface
 public class SqlServerFns implements DatabaseFns {
 
-  private static Logger LOGGER = LoggerFactory.getLogger(SqlServerFns.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerFns.class);
 
   DatabaseProviderRx.Builder dbb;
 
@@ -46,9 +47,6 @@ public class SqlServerFns implements DatabaseFns {
         .withSqlParameterLogging();
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Completable transact(String sql) {
     return dbb.transactRx(db -> {
@@ -56,15 +54,12 @@ public class SqlServerFns implements DatabaseFns {
     });
   }
 
-  /**
-   * {@inheritDoc}
-   */
   @Override
   public Maybe<List<Table>> getTables(String schema) {
     return dbb.transactRx(db -> {
-          db.get().ddl(String.format("USE %s", schema)).execute();
+          db.get().ddl(String.format(Locale.CANADA, "USE %s", schema)).execute();
           List<Table> tableList = new ArrayList<>();
-          db.get().toSelect(String.format(
+          db.get().toSelect(String.format(Locale.CANADA, 
               "SELECT DISTINCT table_name, DDPS.row_count\n"
                   + "FROM information_schema.tables\n"
                   + "         INNER JOIN SYS.OBJECTS AS OBJECTS ON OBJECTS.NAME = TABLES.TABLE_NAME\n"
@@ -78,9 +73,6 @@ public class SqlServerFns implements DatabaseFns {
     );
   }
 
-  /**
-   * {@inheritDoc}
-   */
   public Single<String> getRestoreSql(String database, List<String> backupFiles) {
     return
         dbb.transactRx(db -> {
@@ -144,4 +136,5 @@ public class SqlServerFns implements DatabaseFns {
               return Single.just(sql.toString());
             });
   }
+
 }

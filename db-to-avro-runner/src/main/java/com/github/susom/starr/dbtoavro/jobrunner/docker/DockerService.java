@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.docker;
+package com.github.susom.starr.dbtoavro.jobrunner.docker;
 
 import io.reactivex.Observable;
 import java.util.List;
@@ -33,19 +33,16 @@ public interface DockerService {
 
   /**
    * Starts a container with the given containerId
-   * @param containerId
    */
   void startContainer(String containerId);
 
   /**
    * Stops a container with the given containerId
-   * @param containerId
    */
   void stopContainer(String containerId);
 
   /**
    * Deletes a container with the given containerId
-   * @param containerId
    */
   void removeContainer(String containerId);
 

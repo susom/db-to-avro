@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.runner;
+package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
 /**
  * Different runners may have their own way of logging and tracking progress, implemented using this interface
@@ -24,14 +24,11 @@ public interface JobLogger {
 
   /**
    * Log something that happened regarding this particular job. This is not for application logging.
-   * @param message
    */
   void log(String message);
 
   /**
    * Record job progress
-   * @param complete
-   * @param total
    */
   void progress(int complete, int total);
 

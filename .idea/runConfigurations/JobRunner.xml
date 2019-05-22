@@ -2,13 +2,14 @@
   <configuration default="false" name="JobRunner" type="Application" factoryName="Application">
     <option name="ALTERNATIVE_JRE_PATH" value="1.8" />
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
-    <option name="MAIN_CLASS_NAME" value="com.github.susom.starr.db_to_avro.jobrunner.Main" />
+    <option name="MAIN_CLASS_NAME" value="com.github.susom.starr.dbtoavro.jobrunner.Main" />
     <module name="db-to-avro-runner" />
     <option name="PROGRAM_PARAMETERS" value="--type=restore --database-type=sql-server --database=AdventureWorks2017 --source=$USER_HOME$/Datasets/mssql-server/ --backup-files=AdventureWorks2017.bak --pre-sql=&quot;CREATE DATABASE PRETEST&quot; --post-sql=&quot;CREATE DATABASE POSTTEST&quot;" />
     <option name="VM_PARAMETERS" value="-Dlogback.configurationFile=logback.xml" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/db-to-avro-runner" />
     <method v="2">
       <option name="Make" enabled="true" />
+      <option name="ToolBeforeRunTask" enabled="true" actionId="Tool_External Tools_Nuke docker" />
     </method>
   </configuration>
 </component>

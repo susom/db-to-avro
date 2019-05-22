@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.util;
+package com.github.susom.starr.dbtoavro.jobrunner.util;
 
 import io.reactivex.Flowable;
 import io.reactivex.functions.Function;
@@ -35,13 +35,13 @@ public class RetryWithDelay implements Function<Flowable<Throwable>, Publisher<?
   public RetryWithDelay(final int maxRetries, final int retryDelayMillis) {
     this.maxRetries = maxRetries;
     this.retryDelayMillis = retryDelayMillis;
-    this.retryCount = 0;
+    this.retryCount = 1;
   }
 
   @Override
   public Publisher<?> apply(Flowable<Throwable> throwableFlowable) {
     return throwableFlowable.flatMap((Function<Throwable, Publisher<?>>) throwable -> {
-      if (++retryCount < maxRetries) {
+      if (retryCount++ <= maxRetries) {
         // When this Observable calls onNext, the original
         // Observable will be retried (i.e. re-subscribed).
         return Flowable.timer(retryDelayMillis,

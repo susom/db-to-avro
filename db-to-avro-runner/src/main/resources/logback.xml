@@ -7,7 +7,7 @@
   </appender>
 
   <logger name="com.github.susom.database" level="info" />
-  <logger name="com.github.susom.starr.db_to_avro" level="debug" />
+  <logger name="com.github.susom.starr.dbtoavro" level="debug" />
 
   <root level="warn">
     <appender-ref ref="STDOUT"/>

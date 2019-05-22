@@ -15,16 +15,17 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.runner;
+package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
-import com.github.susom.starr.db_to_avro.jobrunner.docker.DockerService;
-import com.github.susom.starr.db_to_avro.jobrunner.docker.impl.DockerServiceImpl;
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Job;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.DockerFns;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.impl.SqlServerDockerFns;
-import com.github.susom.starr.db_to_avro.jobrunner.functions.impl.SqlServerFns;
-import com.github.susom.starr.db_to_avro.jobrunner.jobs.SqlServer;
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.impl.DockerServiceImpl;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Restore;
+import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
 import java.io.File;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class JobRunner implements JobLogger {
 
-  private static Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
 
   protected Job job;
   private Config config;
@@ -52,18 +53,19 @@ public abstract class JobRunner implements JobLogger {
 
   /**
    * Entrypoint for running different job types
+   *
    * @return completable
    */
   public Completable run() {
 
-    switch (job.getType()) {
+    switch (job.type) {
 
       case "restore":
 
-        if (job.getDatabaseType().equals("sql-server")) {
+        if (job.databaseType.equals("sql-server")) {
           try {
             List<String> mounts = new ArrayList<>();
-            mounts.add(new File(job.getBackupUri()) + ":/backup");
+            mounts.add(new File(job.backupUri) + ":/backup");
 
             DockerFns docker = new SqlServerDockerFns(dockerService, config, mounts);
 
@@ -76,7 +78,12 @@ public abstract class JobRunner implements JobLogger {
             SqlServerFns sql = new SqlServerFns(sqlServerConfig);
 
             log("Starting SqlServer restore task");
-            return SqlServer.Restore(docker, sql, job, this);
+            return Restore.run(docker, sql, job, this)
+                .doOnSuccess(restoreResult -> {
+                  log("\"RestoreResult\": ");
+                  log(new GsonBuilder().setPrettyPrinting().create().toJson(restoreResult));
+                })
+                .ignoreElement();
 
           } catch (Exception ex) {
             return Completable.error(ex);
@@ -86,7 +93,7 @@ public abstract class JobRunner implements JobLogger {
         }
 
       default:
-        return Completable.error(new IllegalArgumentException("Unknown job type " + job.getDatabaseType()));
+        return Completable.error(new IllegalArgumentException("Unknown job type " + job.databaseType));
 
     }
 

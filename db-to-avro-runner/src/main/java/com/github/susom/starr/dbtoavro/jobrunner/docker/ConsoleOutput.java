@@ -15,7 +15,7 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.docker;
+package com.github.susom.starr.dbtoavro.jobrunner.docker;
 
 import com.github.dockerjava.api.model.StreamType;
 import java.util.regex.Matcher;
@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
  */
 public class ConsoleOutput {
 
+  private static Pattern percentPattern = Pattern.compile("(\\d+)\\s*(%\\s*|percent)");
   private StreamType streamType;
   private String line;
 
@@ -51,12 +52,12 @@ public class ConsoleOutput {
   public int getPercent() {
     int value = -1;
     try {
-      Pattern pattern = Pattern.compile("(\\d+)\\s*(%\\s*|percent)");
-      Matcher matcher = pattern.matcher(line);
+      Matcher matcher = percentPattern.matcher(line);
       while (matcher.find()) {
         value = Integer.valueOf(matcher.group(1));
       }
     } catch (Exception ignored) {
+      // expected
     }
     return value;
   }

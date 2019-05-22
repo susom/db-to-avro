@@ -15,9 +15,9 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner.functions;
+package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
-import com.github.susom.starr.db_to_avro.jobrunner.docker.ConsoleOutput;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;

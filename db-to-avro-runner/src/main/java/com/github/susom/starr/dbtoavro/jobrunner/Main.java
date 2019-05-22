@@ -16,15 +16,14 @@
  *
  */
 
-package com.github.susom.starr.db_to_avro.jobrunner;
+package com.github.susom.starr.dbtoavro.jobrunner;
 
 import static java.lang.System.exit;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.susom.starr.db_to_avro.jobrunner.entity.Job;
-import com.github.susom.starr.db_to_avro.jobrunner.runner.ConsoleJobRunner;
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.runner.ConsoleJobRunner;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.Arrays;
@@ -38,7 +37,7 @@ import org.slf4j.LoggerFactory;
 
 public class Main {
 
-  Logger LOGGER = LoggerFactory.getLogger(Main.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   public static void main(String[] args) {
     // Make sure we use the real console for error logging here because something
@@ -89,14 +88,15 @@ public class Main {
         exit(0);
       }
 
-      Job job = new Job()
-          .withType(optionSet.valueOf(type))
-          .withDatabaseType(optionSet.valueOf(databaseType))
-          .withDatabaseName(optionSet.valueOf(database))
-          .withBackupUri(optionSet.valueOf(source))
-          .withBackupFiles(optionSet.valuesOf(backupFiles))
-          .withPreSql(optionSet.valueOf(preSql))
-          .withPostSql(optionSet.valueOf(postSql));
+      final Job job = new Job.Builder()
+          .id(0L)
+          .type(optionSet.valueOf(type))
+          .databaseType(optionSet.valueOf(databaseType))
+          .databaseName(optionSet.valueOf(database))
+          .backupUri(optionSet.valueOf(source))
+          .backupFiles(optionSet.valueOf(backupFiles))
+          .preSql(optionSet.valueOf(preSql))
+          .postSql(optionSet.valueOf(postSql)).build();
 
       Config config = readConfig();
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
@@ -104,14 +104,10 @@ public class Main {
       new ConsoleJobRunner(config, job)
           .run()
           .doOnComplete(() -> {
-            job.setFailed(false);
-            System.out
-                .println("job: " + new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(job));
+            System.out.println("Job complete");
           })
           .doOnError(error -> {
-            job.setFailed(true);
-            System.out
-                .println("job: " + new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(job));
+            System.out.println("Job failed!");
             error.printStackTrace();
             exit(1);
           })
