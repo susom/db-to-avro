@@ -27,6 +27,7 @@ public interface DatabaseFns {
 
   /**
    * Run arbitrary SQL without a return value
+   *
    * @param sql SQL code
    * @return Success of transaction
    */
@@ -34,6 +35,7 @@ public interface DatabaseFns {
 
   /**
    * Get a list of tables and row counts within a given schema/catalog
+   *
    * @param schema schema or catalog
    * @return Maybe a list of {@link Table}
    */

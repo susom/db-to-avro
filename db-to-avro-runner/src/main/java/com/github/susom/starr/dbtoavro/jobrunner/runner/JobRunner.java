@@ -18,18 +18,10 @@
 package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
-import com.github.susom.starr.dbtoavro.jobrunner.docker.impl.DockerServiceImpl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerFns;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.Restore;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerRestore;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,12 +35,9 @@ public abstract class JobRunner implements JobLogger {
   protected Job job;
   private Config config;
 
-  private DockerService dockerService;
-
   public JobRunner(Config config, Job job) {
     this.config = config;
     this.job = job;
-    dockerService = new DockerServiceImpl(config);
   }
 
   /**
@@ -64,21 +53,9 @@ public abstract class JobRunner implements JobLogger {
 
         if (job.databaseType.equals("sql-server")) {
           try {
-            List<String> mounts = new ArrayList<>();
-            mounts.add(new File(job.backupUri) + ":/backup");
-
-            DockerFns docker = new SqlServerDockerFns(dockerService, config, mounts);
-
-            Config sqlServerConfig = Config.from()
-                .value("database.url", config.getString("sqlserver.url"))
-                .value("database.username", config.getString("sqlserver.username"))
-                .value("database.password", config.getString("sqlserver.password"))
-                .get();
-
-            SqlServerFns sql = new SqlServerFns(sqlServerConfig);
 
             log("Starting SqlServer restore task");
-            return Restore.run(docker, sql, job, this)
+            return new SqlServerRestore(config).run(job, this)
                 .doOnSuccess(restoreResult -> {
                   log("\"RestoreResult\": ");
                   log(new GsonBuilder().setPrettyPrinting().create().toJson(restoreResult));

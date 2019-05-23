@@ -17,10 +17,10 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
+import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
-import com.github.susom.database.Config;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
 import io.reactivex.Single;
@@ -33,14 +33,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Sql-server specific SQL statements, for various database tasks
  */
-// TODO: Extract interface
-public class SqlServerFns implements DatabaseFns {
+public class SqlServerDatabaseFns implements DatabaseFns {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerFns.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
   DatabaseProviderRx.Builder dbb;
 
-  public SqlServerFns(Config config) {
+  public SqlServerDatabaseFns(Config config) {
     dbb = DatabaseProviderRx
         .pooledBuilder(config)
         .withSqlInExceptionMessages()
@@ -59,7 +58,7 @@ public class SqlServerFns implements DatabaseFns {
     return dbb.transactRx(db -> {
           db.get().ddl(String.format(Locale.CANADA, "USE %s", schema)).execute();
           List<Table> tableList = new ArrayList<>();
-          db.get().toSelect(String.format(Locale.CANADA, 
+          db.get().toSelect(String.format(Locale.CANADA,
               "SELECT DISTINCT table_name, DDPS.row_count\n"
                   + "FROM information_schema.tables\n"
                   + "         INNER JOIN SYS.OBJECTS AS OBJECTS ON OBJECTS.NAME = TABLES.TABLE_NAME\n"
