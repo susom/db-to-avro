@@ -18,53 +18,65 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
+import java.util.List;
+
 /**
  * Simple pojo for storing an immutable job definition
  */
 public class Job {
 
   public final Long id;
-  public final String backupFiles;
+  public final List<String> backupFiles;
   public final String backupUri;
-  public final String databaseName;
+  public final String catalog;
+  public final List<String> schemas;
   public final String databaseType;
   public final String postSql;
   public final String preSql;
   public final String type;
+  public final String destination;
 
-  public Job(long id, String backupFiles, String backupUri, String databaseName, String databaseType, String postSql,
-      String preSql, String type) {
+  private Job(long id, List<String> backupFiles, String backupUri, String catalog, List<String> schemas,
+      String databaseType,
+      String postSql, String preSql, String type, String destination) {
     this.id = id;
     this.backupFiles = backupFiles;
     this.backupUri = backupUri;
-    this.databaseName = databaseName;
+    this.catalog = catalog;
+    this.schemas = schemas;
     this.databaseType = databaseType;
     this.postSql = postSql;
     this.preSql = preSql;
     this.type = type;
+    this.destination = destination;
+
   }
 
   public Job(Builder builder) {
     this.id = builder.id;
     this.backupFiles = builder.backupFiles;
     this.backupUri = builder.backupUri;
-    this.databaseName = builder.databaseName;
+    this.catalog = builder.catalog;
+    this.schemas = builder.schemas;
     this.databaseType = builder.databaseType;
     this.postSql = builder.postSql;
     this.preSql = builder.preSql;
     this.type = builder.type;
+    this.destination = builder.destination;
   }
 
   public static class Builder {
 
     private Long id;
-    private String backupFiles;
+    private List<String> backupFiles;
     private String backupUri;
-    private String databaseName;
+    private String catalog;
+    private List<String> schemas;
     private String databaseType;
     private String postSql;
     private String preSql;
     private String type;
+    private String destination;
 
     public Builder() {
     }
@@ -78,7 +90,7 @@ public class Job {
       return this;
     }
 
-    public Builder backupFiles(String backupFiles) {
+    public Builder backupFiles(List<String> backupFiles) {
       this.backupFiles = backupFiles;
       return this;
     }
@@ -88,8 +100,13 @@ public class Job {
       return this;
     }
 
-    public Builder databaseName(String databaseName) {
-      this.databaseName = databaseName;
+    public Builder catalog(String catalog) {
+      this.catalog = catalog;
+      return this;
+    }
+
+    public Builder schemas(List<String> schemas) {
+      this.schemas = schemas;
       return this;
     }
 
@@ -110,6 +127,11 @@ public class Job {
 
     public Builder type(String type) {
       this.type = type;
+      return this;
+    }
+
+    public Builder destination(String destination) {
+      this.destination = destination;
       return this;
     }
 

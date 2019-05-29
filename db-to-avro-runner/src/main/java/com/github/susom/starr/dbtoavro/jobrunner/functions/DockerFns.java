@@ -37,7 +37,7 @@ public interface DockerFns {
    * @param containerId containerId where SQL server is running
    * @return completable
    */
-  Completable start(String containerId);
+  Completable start(final String containerId);
 
   /**
    * Stops an SQL container
@@ -45,7 +45,7 @@ public interface DockerFns {
    * @param containerId containerId where SQL server is running
    * @return completable
    */
-  Completable stop(String containerId);
+  Completable stop(final String containerId);
 
   /**
    * Deletes an SQL server container
@@ -53,21 +53,23 @@ public interface DockerFns {
    * @param containerId containerId to delete
    * @return completable
    */
-  Completable destroy(String containerId);
+  Completable destroy(final String containerId);
 
   /**
    * Returns a successful completable if the SQL server is up and running
+   *
    * @param containerId containerId where SQL server is running
    * @return completable, complete if SQL server is up and running
    */
-  Completable healthCheck(String containerId);
+  Completable healthCheck(final String containerId);
 
   /**
    * Executes an SQL statement by calling the 'sqlcmd' utility in the docker container. Used for database restores.
+   *
    * @param containerId containerId where SQL server is running
    * @param query SQL query to run (should be a simple query)
    * @return an observable with the console output of sqlcmd
    */
-  Observable<ConsoleOutput> execSqlShell(String containerId, String query);
+  Observable<ConsoleOutput> execSqlShell(final String containerId, final String query);
 
 }

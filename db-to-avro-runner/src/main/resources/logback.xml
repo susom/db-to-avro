@@ -6,7 +6,10 @@
     </encoder>
   </appender>
 
-  <logger name="com.github.susom.database" level="info" />
+  <logger name="com.github.susom.dbgoodies.etl" level="warn"/>
+  <logger name="com.github.susom.database" level="warn" />
+  <logger name="com.github.susom.starr.dbtoavro.jobrunner.util" level="info" />
+
   <logger name="com.github.susom.starr.dbtoavro" level="debug" />
 
   <root level="warn">

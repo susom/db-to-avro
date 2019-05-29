@@ -61,6 +61,11 @@
       <version>3.0</version>
     </dependency>
     <dependency>
+      <groupId>com.github.susom</groupId>
+      <artifactId>database-goodies</artifactId>
+      <version>1.2-SNAPSHOT</version>
+    </dependency>
+    <dependency>
       <groupId>io.reactivex.rxjava2</groupId>
       <artifactId>rxjava</artifactId>
       <version>2.2.8</version>

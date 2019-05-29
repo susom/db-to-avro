@@ -23,6 +23,7 @@ import static java.lang.System.exit;
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Job.Builder;
 import com.github.susom.starr.dbtoavro.jobrunner.runner.ConsoleJobRunner;
 import java.io.File;
 import java.io.PrintStream;
@@ -67,11 +68,16 @@ public class Main {
       OptionSpec<String> postSql = parser.accepts("post-sql", "sql to execute after restore").withRequiredArg();
       OptionSpec<String> type = parser.accepts("type", "job type").withRequiredArg().required();
       OptionSpec<String> databaseType = parser.accepts("database-type", "database vendor").withRequiredArg().required();
-      OptionSpec<String> database = parser.accepts("database", "database to restore").withRequiredArg().required();
+      OptionSpec<String> catalog = parser.accepts("catalog", "catalogs to export").withRequiredArg().required();
+      OptionSpec<String> schemas = parser.accepts("schemas", "schemas to export")
+          .withRequiredArg()
+          .ofType(String.class)
+          .withValuesSeparatedBy(',');
       OptionSpec<String> source = parser.accepts("source", "directory containing backups").withRequiredArg().required();
+      OptionSpec<String> destination = parser.accepts("destination", "destination of output files").withRequiredArg()
+          .required();
       OptionSpec<String> backupFiles = parser.accepts("backup-files", "comma-delimited list of backup files")
           .withRequiredArg()
-          .required()
           .ofType(String.class)
           .withValuesSeparatedBy(',')
           .required();
@@ -81,6 +87,7 @@ public class Main {
       try {
         optionSet = parser.parse(args);
       } catch (OptionException ex) {
+        parser.printHelpOn(System.out);
         exit(1);
       }
       if (optionSet.has(helpOption)) {
@@ -88,26 +95,26 @@ public class Main {
         exit(0);
       }
 
-      final Job job = new Job.Builder()
+      final Job job = new Builder()
           .id(0L)
           .type(optionSet.valueOf(type))
           .databaseType(optionSet.valueOf(databaseType))
-          .databaseName(optionSet.valueOf(database))
+          .catalog(optionSet.valueOf(catalog))
+          .schemas(optionSet.valuesOf(schemas))
           .backupUri(optionSet.valueOf(source))
-          .backupFiles(optionSet.valueOf(backupFiles))
+          .backupFiles(optionSet.valuesOf(backupFiles))
+          .destination(optionSet.valueOf(destination))
           .preSql(optionSet.valueOf(preSql))
-          .postSql(optionSet.valueOf(postSql)).build();
+          .postSql(optionSet.valueOf(postSql))
+          .build();
 
       Config config = readConfig();
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
       new ConsoleJobRunner(config, job)
           .run()
-          .doOnComplete(() -> {
-            System.out.println("Job complete");
-          })
           .doOnError(error -> {
-            System.out.println("Job failed!");
+            System.err.println("Job failed!");
             error.printStackTrace();
             exit(1);
           })
@@ -123,7 +130,10 @@ public class Main {
   private Config readConfig() {
     String properties = System.getProperty("properties",
         "conf/app.properties" + File.pathSeparator + "local.properties" + File.pathSeparator + "sample.properties");
+
     Config subs = ConfigFrom.firstOf().value("UUID", UUID.randomUUID().toString()).get();
+
+    LOGGER.debug("UUID: {}", subs.getString("UUID"));
     return Config.from().systemProperties().propertyFile(properties.split(File.pathSeparator))
         .substitutions(subs).get();
   }

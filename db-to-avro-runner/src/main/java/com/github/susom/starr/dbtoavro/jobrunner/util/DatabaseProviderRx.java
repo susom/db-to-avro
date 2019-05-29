@@ -36,6 +36,7 @@ import com.github.susom.database.Transaction;
 import com.github.susom.database.TransactionImpl;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
+import io.reactivex.exceptions.Exceptions;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.Connection;
@@ -47,10 +48,10 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * If you are calling this from a Vert.x context, be sure to subscribe and schedule these observables with {@link
- * io.vertx.reactivex.RxHelper#blockingScheduler(io.vertx.core.Vertx vertx)}
+ * If you are calling this from a Vert.x context, be sure to subscribe using vertx RxHelper.blockingScheduler()
  *
- * <p>This is a lazy provider for Database instances. It helps avoid allocating connection or transaction resources until
+ * <p>This is a lazy provider for Database instances. It helps avoid allocating connection or transaction resources
+ * until
  * (or if) we actually need a Database. As a consequence of this laziness, the underlying resources require explicit
  * cleanup by calling either commitAndClose() or rollbackAndClose().</p>
  *
@@ -197,8 +198,8 @@ public class DatabaseProviderRx implements Supplier<Database> {
           }
         }
         emitter.onComplete();
-      } catch (Throwable t) {
-        emitter.onError(t);
+      } catch (Throwable ex) {
+        Exceptions.propagate(ex);
       }
     });
   }
@@ -228,10 +229,8 @@ public class DatabaseProviderRx implements Supplier<Database> {
           }
         }
         emitter.onComplete();
-      } catch (ThreadDeath t) {
-        throw t;
       } catch (Throwable t) {
-        emitter.onError(t);
+        Exceptions.propagate(t);
       }
     });
   }
@@ -264,7 +263,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           emitter.onComplete();
         }
       } catch (Throwable t) {
-        emitter.onError(t);
+        Exceptions.propagate(t);
       }
     });
   }
@@ -300,7 +299,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           emitter.onComplete();
         }
       } catch (Throwable t) {
-        emitter.onError(t);
+        Exceptions.propagate(t);
       }
     });
   }

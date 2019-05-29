@@ -19,7 +19,9 @@ package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExportImpl;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerRestore;
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
 import org.slf4j.Logger;
@@ -47,21 +49,33 @@ public abstract class JobRunner implements JobLogger {
    */
   public Completable run() {
 
+    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
     switch (job.type) {
 
       case "restore":
+      case "export":
 
         if (job.databaseType.equals("sql-server")) {
           try {
-
             log("Starting SqlServer restore task");
             return new SqlServerRestore(config).run(job, this)
-                .doOnSuccess(restoreResult -> {
-                  log("\"RestoreResult\": ");
-                  log(new GsonBuilder().setPrettyPrinting().create().toJson(restoreResult));
-                })
-                .ignoreElement();
-
+                .flatMapCompletable(database -> {
+                  if (job.type.equals("export")) {
+                    return new AvroExportImpl(database, config).run(job, this)
+                        .toList()
+                        .map(gson::toJson)
+                        .doOnSuccess(json -> {
+                          log("\"AvroFiles\": ");
+                          log(json);
+                        })
+                        .ignoreElement();
+                  } else {
+                    log("\"RestoreResult\": ");
+                    log(gson.toJson(database));
+                    return Completable.complete();
+                  }
+                });
           } catch (Exception ex) {
             return Completable.error(ex);
           }

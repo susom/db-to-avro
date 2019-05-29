@@ -20,10 +20,12 @@ package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
+import com.github.susom.starr.dbtoavro.jobrunner.docker.impl.DockerServiceImpl;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
+import io.reactivex.exceptions.Exceptions;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -40,12 +42,12 @@ public class SqlServerDockerFns implements DockerFns {
   private String image;
   private String password;
 
-  public SqlServerDockerFns(final DockerService dockerService, final Config config, final List<String> mounts) {
-    this.dockerService = dockerService;
+  public SqlServerDockerFns(final Config config, final List<String> mounts) {
     this.mounts = mounts;
     this.image = config.getString("sqlserver.image", "mcr.microsoft.com/mssql/server:2017-latest");
     this.password = config.getStringOrThrow("sqlserver.password");
     this.env = Arrays.asList(config.getStringOrThrow("sqlserver.env").split("\\s*,\\s*"));
+    this.dockerService = new DockerServiceImpl(config);
   }
 
   @Override
@@ -56,49 +58,49 @@ public class SqlServerDockerFns implements DockerFns {
             dockerService.createContainer(image, mounts, env.stream().map(object -> Objects.toString(object, null))
                 .collect(Collectors.toList())));
       } catch (Exception ex) {
-        emitter.onError(ex);
+        Exceptions.propagate(ex);
       }
     });
   }
 
   @Override
-  public Completable start(String containerId) {
+  public Completable start(final String containerId) {
     return Completable.create(emitter -> {
       try {
         this.dockerService.startContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        emitter.onError(ex);
+        Exceptions.propagate(ex);
       }
     });
   }
 
   @Override
-  public Completable stop(String containerId) {
+  public Completable stop(final String containerId) {
     return Completable.create(emitter -> {
       try {
         this.dockerService.stopContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        emitter.onError(ex);
+        Exceptions.propagate(ex);
       }
     });
   }
 
   @Override
-  public Completable destroy(String containerId) {
+  public Completable destroy(final String containerId) {
     return Completable.create(emitter -> {
       try {
         this.dockerService.removeContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        emitter.onError(ex);
+        Exceptions.propagate(ex);
       }
     });
   }
 
   @Override
-  public Observable<ConsoleOutput> execSqlShell(String containerId, String query) {
+  public Observable<ConsoleOutput> execSqlShell(final String containerId, final String query) {
     return dockerService.exec(containerId,
         "/opt/mssql-tools/bin/sqlcmd",
         "-s", "localhost",
@@ -108,7 +110,7 @@ public class SqlServerDockerFns implements DockerFns {
   }
 
   @Override
-  public Completable healthCheck(String containerId) {
+  public Completable healthCheck(final String containerId) {
     return execSqlShell(containerId, "SELECT 1;")
         .filter(p -> p.getData().contains("1 rows affected"))
         .count()
