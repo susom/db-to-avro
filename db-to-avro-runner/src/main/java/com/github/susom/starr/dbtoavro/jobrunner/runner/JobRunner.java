@@ -18,14 +18,11 @@
 package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerAvroFns;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExport;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
@@ -57,31 +54,33 @@ public abstract class JobRunner implements JobLogger {
 
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    if (job.flavor.equals("sqlserver")) {
+    Single<Warehouse> warehouse;
+    switch (job.flavor) {
+      case "sqlserver":
+        if (job.connection == null) {
+          log("Starting sql server database restore");
+          warehouse = new SqlServerLoadBackup(config).run(job, this);
+        } else {
+          log("Using existing sql server database");
+          warehouse = new SqlServerLoadExisting(config).run(job, this);
+        }
+        break;
+      default:
+        return Completable.error(new IllegalArgumentException("Unimplemented database flavor " + job.flavor));
+    }
 
-      Single<Warehouse> warehouse;
-      AvroFns avroFns = new SqlServerAvroFns(config);
-
-      if (job.connection == null) {
-        log("Starting sql server database restore");
-        warehouse = new SqlServerLoadBackup(config).run(job, this);
-      } else {
-        log("Using existing sql server database");
-        warehouse = new SqlServerLoadExisting(config).run(job, this);
-      }
-
-      return warehouse.flatMapCompletable(wh ->
-          new AvroExport(wh, config).run(job, this)
-              .toList()
-              .map(gson::toJson)
-              .doOnSuccess(json -> {
-                log("\"AvroFiles\": ");
-                log(json);
-              })
-              .ignoreElement());
-
+    if (job.destination != null) {
+      return new AvroExport(warehouse.blockingGet(), config).run(job, this)
+          .toList()
+          .map(gson::toJson)
+          .doOnSuccess(json -> {
+            log("\"AvroFiles\": ");
+            log(json);
+          })
+          .ignoreElement();
     } else {
-      return Completable.error(new IllegalArgumentException("Unknown database flavor " + job.flavor));
+      log("No destination, not exporting avro");
+      return Completable.complete();
     }
 
   }

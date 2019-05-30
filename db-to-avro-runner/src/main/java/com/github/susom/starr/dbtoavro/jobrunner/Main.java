@@ -93,9 +93,10 @@ public class Main {
     OptionSpec<String> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
         .withRequiredArg()
         .required();
-    OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg()
-        .required();
+    OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
+
+    // TODO: flag for deleting docker container after successful export
 
     try {
 
