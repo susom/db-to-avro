@@ -29,19 +29,18 @@ public class AvroExportImpl extends AvroExport {
             .flatMap(schema -> Observable.fromIterable(schema.tables)
                 .flatMap(table -> {
                       if (table.rows > rowsPerAvro) {
-                        return Observable.just(table)
-                            .flatMap(source -> avroFns.getRanges(source, source.rows / rowsPerAvro)
-                                .toFlowable(BackpressureStrategy.BUFFER)
-                                .parallel()
-                                .runOn(Schedulers.computation())
-                                .map(range -> avroFns.saveAsAvro(source, range, job.destination + filePattern))
-                                .doOnNext(file -> logger.log(file.path))
-                                .sequential()
-                                .toObservable()
-                            ).subscribeOn(Schedulers.io()) // run in io thread pool, while rows export in computation pool
-                            .doOnComplete(() -> avroFns.cleanup(table));
+                        return avroFns.getRanges(table, table.rows / rowsPerAvro)
+                            .toFlowable(BackpressureStrategy.BUFFER)
+                            .parallel()
+                            .runOn(Schedulers.computation())
+                            .flatMap(range -> avroFns.saveAsAvro(table, range, job.destination + filePattern).toFlowable())
+                            .sequential()
+                            .doOnComplete(() -> avroFns.cleanup(table))
+                            .toObservable()
+                            .doOnNext(file -> logger.log(file.path))
+                            .subscribeOn(Schedulers.io()); // run in io thread pool, while rows export in computation pool
                       } else {
-                        return Observable.just(avroFns.saveAsAvro(table, job.destination + filePattern))
+                        return avroFns.saveAsAvro(table, job.destination + filePattern).toObservable()
                             .doOnNext(file -> logger.log(file.path))
                             .subscribeOn(Schedulers.io()); // run in io thread pool
                       }

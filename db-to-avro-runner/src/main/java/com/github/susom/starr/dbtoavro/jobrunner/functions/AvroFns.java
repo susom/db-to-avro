@@ -4,6 +4,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import io.reactivex.Observable;
+import io.reactivex.Single;
 
 public interface AvroFns {
 
@@ -14,7 +15,7 @@ public interface AvroFns {
    * @param range interval to export
    * @return AvroFile instance
    */
-  AvroFile saveAsAvro(Table table, Range range, String path);
+  Single<AvroFile> saveAsAvro(Table table, Range range, String path);
 
   /**
    * Creates a single Avro file from a table
@@ -22,7 +23,7 @@ public interface AvroFns {
    * @param table to export
    * @return AvroFile instance
    */
-  AvroFile saveAsAvro(Table table, String path);
+  Single<AvroFile> saveAsAvro(Table table, String path);
 
   /**
    * Emits a ranges from a table which has been divided up

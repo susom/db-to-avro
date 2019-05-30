@@ -9,6 +9,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
+import io.reactivex.Single;
 import io.reactivex.exceptions.Exceptions;
 import java.sql.Types;
 import java.util.ArrayList;
@@ -136,9 +137,9 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   @Override
-  public AvroFile saveAsAvro(Table table, Range range, String pathExpr) {
-    AvroFile avroFile = new AvroFile(table);
-    dbb.withConnectionAccess().transact(db -> {
+  public Single<AvroFile> saveAsAvro(Table table, Range range, String pathExpr) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      AvroFile avroFile = new AvroFile(table);
       avroFile.startTime = DateTime.now().toString();
 
       String catalog = avroFile.table.getSchema().getCatalog().name;
@@ -174,14 +175,14 @@ public class SqlServerAvroFns implements AvroFns {
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;
-    });
-    return avroFile;
+      return avroFile;
+    }).toSingle();
   }
 
   @Override
-  public AvroFile saveAsAvro(Table table, String pathExpr) {
-    AvroFile avroFile = new AvroFile(table);
-    dbb.withConnectionAccess().transact(db -> {
+  public Single<AvroFile> saveAsAvro(Table table, String pathExpr) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      AvroFile avroFile = new AvroFile(table);
       String catalog = table.getSchema().getCatalog().name;
       String schema = table.getSchema().name;
 
@@ -214,8 +215,8 @@ public class SqlServerAvroFns implements AvroFns {
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;
-    });
-    return avroFile;
+      return avroFile;
+    }).toSingle();
   }
 
   private boolean isSupportedType(int type) {
