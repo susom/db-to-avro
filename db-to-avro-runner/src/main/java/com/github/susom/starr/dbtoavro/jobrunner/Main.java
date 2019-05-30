@@ -96,7 +96,10 @@ public class Main {
     OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
-    // TODO: flag for deleting docker container after successful export
+    // TODO:
+    //  switches for deleting docker container after successful export
+    //  switches for listing catalogs, schemas, and tables
+    //  switch for testing connection to db
 
     try {
 

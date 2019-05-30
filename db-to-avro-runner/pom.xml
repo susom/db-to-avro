@@ -35,6 +35,7 @@
   <properties>
     <version.jopt.simple>5.0.4</version.jopt.simple>
     <docker.version>3.1.2</docker.version>
+    <main.class>com.github.susom.starr.dbtoavro.jobrunner.Main</main.class>
   </properties>
 
   <dependencyManagement>
@@ -103,22 +104,53 @@
           <scope>runtime</scope>
         </dependency>
       </dependencies>
-      <build>
-        <plugins>
-          <plugin>
-            <artifactId>maven-failsafe-plugin</artifactId>
-            <configuration>
-              <includes>
-                <include>**/*DaoTest</include>
-                <include>**/*DbTest</include>
-                <include>**/*SqlServerTest</include>
-              </includes>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
     </profile>
   </profiles>
 
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <includes>
+            <include>**/*DaoTest</include>
+            <include>**/*DbTest</include>
+            <include>**/*SqlServerTest</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>${main.class}</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>

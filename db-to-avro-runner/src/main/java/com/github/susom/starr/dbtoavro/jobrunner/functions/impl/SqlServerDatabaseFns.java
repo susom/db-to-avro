@@ -58,6 +58,11 @@ public class SqlServerDatabaseFns implements DatabaseFns {
 
   @Override
   public Single<Warehouse> getDatabase(String containerId) {
+
+    // TODO: This can be parallelized!
+    // TODO: Needs to log output, since this can take a LONG time
+    // TODO: Remove getting table sizes? it's not used, really.
+
     return dbb.withConnectionAccess().transactRx(db -> {
       Warehouse database = new Warehouse(containerId);
       database.flavor = db.get().flavor();
