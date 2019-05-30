@@ -18,10 +18,10 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
@@ -29,7 +29,6 @@ import io.reactivex.Single;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,25 +48,18 @@ public class SqlServerDatabaseFns implements DatabaseFns {
         .withSqlParameterLogging();
   }
 
-  public Completable dropTempTable(Table table) {
-    return dbb.transactRx(db -> {
-      db.get().ddl(String  // FIX ME I WILL DELETE STUFF
-          .format("DROP TABLE %s.%s.%s", table.getSchema().getCatalog().name, table.getSchema().name, table.name))
-          .execute();
-    });
-  }
-
   @Override
   public Completable transact(String sql) {
+    if (sql == null) return Completable.complete();
     return dbb.transactRx(db -> {
       db.get().ddl(sql).execute();
     });
   }
 
   @Override
-  public Single<Database> getDatabase(String containerId) {
+  public Single<Warehouse> getDatabase(String containerId) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      Database database = new Database(containerId);
+      Warehouse database = new Warehouse(containerId);
       database.flavor = db.get().flavor();
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       // Retrieve catalogs
@@ -77,12 +69,12 @@ public class SqlServerDatabaseFns implements DatabaseFns {
         if (catalogName.equals("master") || catalogName.equals("msdb") || catalogName.equals("tempdb")) {
           continue;
         }
-        Database.Catalog catalog = database.new Catalog(catalogName);
+        Warehouse.Catalog catalog = database.new Catalog(catalogName);
         // Retrieve schemas
         ResultSet schemas = metadata.getSchemas(catalogName, null);
         while (schemas.next()) {
           String schemaName = schemas.getString(1);
-          Database.Catalog.Schema schema = catalog.new Schema(schemaName);
+          Warehouse.Catalog.Schema schema = catalog.new Schema(schemaName);
           if (schemaName.equals("sys") || schemaName.startsWith("db_") || schemaName.equals("guest") || schemaName
               .equals("INFORMATION_SCHEMA")) {
             continue;
@@ -91,7 +83,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           ResultSet tables = metadata.getTables(catalogName, schemaName, null, new String[]{"TABLE"});
           while (tables.next()) {
             String tableName = tables.getString(3);
-            Database.Catalog.Schema.Table table = schema.new Table(tableName);
+            Warehouse.Catalog.Schema.Table table = schema.new Table(tableName);
             ResultSet columns = metadata.getColumns(catalogName, schemaName, tableName, "%");
             while (columns.next()) {
               String name = columns.getString(4);

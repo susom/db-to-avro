@@ -2,9 +2,9 @@ package com.github.susom.starr.dbtoavro.jobrunner.jobs.impl;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.AvroExport;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Export;
 import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Observable;
@@ -12,11 +12,11 @@ import io.reactivex.schedulers.Schedulers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AvroExportImpl extends AvroExport {
+public class AvroExport extends Export {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(AvroExportImpl.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(AvroExport.class);
 
-  public AvroExportImpl(Database database, Config config) {
+  public AvroExport(Warehouse database, Config config) {
     super(database, config);
   }
 

@@ -18,12 +18,18 @@
 package com.github.susom.starr.dbtoavro.jobrunner.runner;
 
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExportImpl;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerRestore;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerAvroFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExport;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
+import io.reactivex.Single;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +49,7 @@ public abstract class JobRunner implements JobLogger {
   }
 
   /**
-   * Entrypoint for running different job types
+   * Entry point for running jobs
    *
    * @return completable
    */
@@ -51,41 +57,31 @@ public abstract class JobRunner implements JobLogger {
 
     Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    switch (job.type) {
+    if (job.flavor.equals("sqlserver")) {
 
-      case "restore":
-      case "export":
+      Single<Warehouse> warehouse;
+      AvroFns avroFns = new SqlServerAvroFns(config);
 
-        if (job.databaseType.equals("sql-server")) {
-          try {
-            log("Starting SqlServer restore task");
-            return new SqlServerRestore(config).run(job, this)
-                .flatMapCompletable(database -> {
-                  if (job.type.equals("export")) {
-                    return new AvroExportImpl(database, config).run(job, this)
-                        .toList()
-                        .map(gson::toJson)
-                        .doOnSuccess(json -> {
-                          log("\"AvroFiles\": ");
-                          log(json);
-                        })
-                        .ignoreElement();
-                  } else {
-                    log("\"RestoreResult\": ");
-                    log(gson.toJson(database));
-                    return Completable.complete();
-                  }
-                });
-          } catch (Exception ex) {
-            return Completable.error(ex);
-          }
-        } else {
-          return Completable.error(new IllegalArgumentException("Unknown database type " + job));
-        }
+      if (job.connection == null) {
+        log("Starting sql server database restore");
+        warehouse = new SqlServerLoadBackup(config).run(job, this);
+      } else {
+        log("Using existing sql server database");
+        warehouse = new SqlServerLoadExisting(config).run(job, this);
+      }
 
-      default:
-        return Completable.error(new IllegalArgumentException("Unknown job type " + job.databaseType));
+      return warehouse.flatMapCompletable(wh ->
+          new AvroExport(wh, config).run(job, this)
+              .toList()
+              .map(gson::toJson)
+              .doOnSuccess(json -> {
+                log("\"AvroFiles\": ");
+                log(json);
+              })
+              .ignoreElement());
 
+    } else {
+      return Completable.error(new IllegalArgumentException("Unknown database flavor " + job.flavor));
     }
 
   }

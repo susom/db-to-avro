@@ -27,56 +27,54 @@ public class Job {
 
   public final Long id;
   public final List<String> backupFiles;
-  public final String backupUri;
+  public final String backupDir;
   public final String catalog;
   public final List<String> schemas;
-  public final String databaseType;
   public final String postSql;
   public final String preSql;
-  public final String type;
+  public final String flavor;
   public final String destination;
+  public final String connection;
 
-  private Job(long id, List<String> backupFiles, String backupUri, String catalog, List<String> schemas,
-      String databaseType,
-      String postSql, String preSql, String type, String destination) {
+  private Job(long id, List<String> backupFiles, String backupDir, String catalog, List<String> schemas,
+      String postSql, String preSql, String flavor, String destination, String connection) {
     this.id = id;
     this.backupFiles = backupFiles;
-    this.backupUri = backupUri;
+    this.backupDir = backupDir;
     this.catalog = catalog;
     this.schemas = schemas;
-    this.databaseType = databaseType;
     this.postSql = postSql;
     this.preSql = preSql;
-    this.type = type;
+    this.flavor = flavor;
     this.destination = destination;
-
+    this.connection = connection;
   }
 
   public Job(Builder builder) {
     this.id = builder.id;
     this.backupFiles = builder.backupFiles;
-    this.backupUri = builder.backupUri;
+    this.backupDir = builder.backupDir;
     this.catalog = builder.catalog;
     this.schemas = builder.schemas;
-    this.databaseType = builder.databaseType;
     this.postSql = builder.postSql;
     this.preSql = builder.preSql;
-    this.type = builder.type;
+    this.flavor = builder.flavor;
     this.destination = builder.destination;
+    this.connection = builder.connection;
   }
 
   public static class Builder {
 
     private Long id;
     private List<String> backupFiles;
-    private String backupUri;
+    private String backupDir;
     private String catalog;
     private List<String> schemas;
-    private String databaseType;
     private String postSql;
     private String preSql;
-    private String type;
+    private String flavor;
     private String destination;
+    private String connection;
 
     public Builder() {
     }
@@ -95,8 +93,8 @@ public class Job {
       return this;
     }
 
-    public Builder backupUri(String backupUri) {
-      this.backupUri = backupUri;
+    public Builder backupDir(String backupUri) {
+      this.backupDir = backupUri;
       return this;
     }
 
@@ -110,11 +108,6 @@ public class Job {
       return this;
     }
 
-    public Builder databaseType(String databaseType) {
-      this.databaseType = databaseType;
-      return this;
-    }
-
     public Builder postSql(String postSql) {
       this.postSql = postSql;
       return this;
@@ -125,13 +118,18 @@ public class Job {
       return this;
     }
 
-    public Builder type(String type) {
-      this.type = type;
+    public Builder flavor(String type) {
+      this.flavor = type;
       return this;
     }
 
     public Builder destination(String destination) {
       this.destination = destination;
+      return this;
+    }
+
+    public Builder connection(String connection) {
+      this.connection = connection;
       return this;
     }
 

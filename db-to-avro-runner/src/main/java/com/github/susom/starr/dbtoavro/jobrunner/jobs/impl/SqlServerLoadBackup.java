@@ -18,11 +18,11 @@
 package com.github.susom.starr.dbtoavro.jobrunner.jobs.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.Restore;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Load;
 import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
 import io.reactivex.Single;
@@ -32,30 +32,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class SqlServerRestore extends Restore {
+/**
+ * Restores an SQL server database from a backup file
+ */
+public class SqlServerLoadBackup extends Load {
 
   private SqlServerDockerFns docker;
   private SqlServerDatabaseFns db;
 
-  public SqlServerRestore(Config config) {
+  public SqlServerLoadBackup(Config config) {
     super(config);
-
-    String username = config.getString("sqlserver.username");
-    String password = config.getString("sqlserver.password");
-
-    db = new SqlServerDatabaseFns(Config.from()
-        .value("database.url", config.getString("sqlserver.url"))
-        .value("database.username", username)
-        .value("database.password", password)
-        .get());
+    this.db = new SqlServerDatabaseFns(config);
   }
 
   @Override
-  public Single<Database> run(Job job, JobLogger logger) {
+  public Single<Warehouse> run(Job job, JobLogger logger) {
 
     // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
-    mounts.add(new File(job.backupUri) + ":/backup");
+    mounts.add(new File(job.backupDir) + ":/backup");
     docker = new SqlServerDockerFns(config, mounts);
 
     return docker.create().flatMap(containerId ->
@@ -74,8 +69,9 @@ public class SqlServerRestore extends Restore {
                 .doOnNext(p -> logger.progress(p.getPercent(), 100)).ignoreElements()
                 .doOnComplete(() -> logger.log("Restore completed"))
                 .andThen(db.transact(job.postSql))
-                .doOnComplete(() -> logger.log("Database post-sql completed"))
+                .doOnComplete(() -> logger.log("Database post-sql completed, introspecting database"))
                 .andThen(db.getDatabase(containerId))
+                .doFinally(() -> logger.log("Database introspection complete"))
             )
     );
   }

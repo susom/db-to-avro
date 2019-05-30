@@ -2,22 +2,22 @@ package com.github.susom.starr.dbtoavro.jobrunner.jobs;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerAvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
 import io.reactivex.Observable;
 
-public abstract class AvroExport {
+public abstract class Export {
 
   protected final Config config;
-  protected final Database database;
+  protected final Warehouse database;
   protected final AvroFns avroFns;
   protected final String filePattern;
   protected final int rowsPerAvro;
 
-  public AvroExport(Database database, Config config) {
+  public Export(Warehouse database, Config config) {
     this.config = config;
     this.database = database;
     rowsPerAvro = config.getInteger("avro.rows", 100000);
@@ -25,11 +25,7 @@ public abstract class AvroExport {
 
     switch (database.flavor) {
       case sqlserver:
-        avroFns = new SqlServerAvroFns(Config.from()
-            .value("database.url", config.getString("sqlserver.url"))
-            .value("database.username", config.getString("sqlserver.username"))
-            .value("database.password", config.getString("sqlserver.password"))
-            .get());
+        avroFns = new SqlServerAvroFns(config);
         break;
       case oracle:
         // TBI

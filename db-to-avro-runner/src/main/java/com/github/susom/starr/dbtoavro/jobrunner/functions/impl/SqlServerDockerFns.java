@@ -40,12 +40,14 @@ public class SqlServerDockerFns implements DockerFns {
   private List<String> mounts;
   private List<String> env;
   private String image;
+  private String username;
   private String password;
 
   public SqlServerDockerFns(final Config config, final List<String> mounts) {
     this.mounts = mounts;
-    this.image = config.getString("sqlserver.image", "mcr.microsoft.com/mssql/server:2017-latest");
-    this.password = config.getStringOrThrow("sqlserver.password");
+    this.image = config.getStringOrThrow("sqlserver.image");
+    this.username = config.getStringOrThrow("database.user");
+    this.password = config.getStringOrThrow("database.password");
     this.env = Arrays.asList(config.getStringOrThrow("sqlserver.env").split("\\s*,\\s*"));
     this.dockerService = new DockerServiceImpl(config);
   }
@@ -104,7 +106,7 @@ public class SqlServerDockerFns implements DockerFns {
     return dockerService.exec(containerId,
         "/opt/mssql-tools/bin/sqlcmd",
         "-s", "localhost",
-        "-U", "sa",
+        "-U", username,
         "-P", password,
         "-Q", query);
   }

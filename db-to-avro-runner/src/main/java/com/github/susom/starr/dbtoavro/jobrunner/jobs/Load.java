@@ -1,16 +1,16 @@
 package com.github.susom.starr.dbtoavro.jobrunner.jobs;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
 import io.reactivex.Single;
 
-public abstract class Restore {
+public abstract class Load {
 
   protected final Config config;
 
-  public Restore(Config config) {
+  public Load(Config config) {
     this.config = config;
   }
 
@@ -21,6 +21,6 @@ public abstract class Restore {
    * @param logger job logger
    * @return Completable containing database, or error
    */
-  public abstract Single<Database> run(Job job, JobLogger logger);
+  public abstract Single<Warehouse> run(Job job, JobLogger logger);
 
 }
