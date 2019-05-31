@@ -21,13 +21,14 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
 import io.reactivex.Single;
+import java.sql.CallableStatement;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,8 @@ import org.slf4j.LoggerFactory;
 public class SqlServerDatabaseFns implements DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
+
+  private static final String TEMP_SUFFIX = "_XSPLITX";
 
   private DatabaseProviderRx.Builder dbb;
 
@@ -88,6 +91,9 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           ResultSet tables = metadata.getTables(catalogName, schemaName, null, new String[]{"TABLE"});
           while (tables.next()) {
             String tableName = tables.getString(3);
+            if (tableName.contains(TEMP_SUFFIX)) {
+              continue;
+            }
             LOGGER.info("Introspecting table {}.{}.{}", catalogName, schemaName, tableName);
             Database.Catalog.Schema.Table table = schema.new Table(tableName);
             ResultSet columns = metadata.getColumns(catalogName, schemaName, tableName, "%");
@@ -103,23 +109,42 @@ public class SqlServerDatabaseFns implements DatabaseFns {
         database.catalogs.add(catalog);
       }
 
-      // Get row counts
+      // Get row counts and space used
+      LOGGER.info("Getting table size information");
       for (Catalog catalog : database.catalogs) {
         db.get().underlyingConnection().setCatalog(catalog.name);
         for (Schema schema : catalog.schemas) {
           db.get().underlyingConnection().setSchema(schema.name);
-          for (Table table : schema.tables) {
-            table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-                + "FROM sys.objects OBJECTS\n"
-                + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-                + "WHERE OBJECTS.type = 'U'\n"
-                + "  AND PARTITIONS.index_id < 2\n"
-                + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-                + "  AND OBJECTS.Name = ?")
-                .argString(schema.name)
-                .argString(table.name)
-                .queryLongOrZero();
-          }
+          schema.tables
+              .parallelStream()
+              .forEach(table -> {
+
+                // Get number of rows
+//                table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+//                    + "FROM sys.objects OBJECTS\n"
+//                    + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+//                    + "WHERE OBJECTS.type = 'U'\n"
+//                    + "  AND PARTITIONS.index_id < 2\n"
+//                    + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+//                    + "  AND OBJECTS.Name = ?")
+//                    .argString(schema.name)
+//                    .argString(table.name)
+//                    .queryLongOrZero();
+
+                // Get space used in bytes
+                try (CallableStatement spaceUsed = db.get().underlyingConnection()
+                    .prepareCall("{call sp_spaceused(?)}")) {
+                  spaceUsed.setString(1, schema.name + "." + table.name);
+                  if (spaceUsed.execute()) {
+                    ResultSet rs = spaceUsed.getResultSet();
+                    while (rs.next()) {
+                      table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+                    }
+                  }
+                } catch (SQLException ignored) {
+                }
+
+              });
         }
       }
 

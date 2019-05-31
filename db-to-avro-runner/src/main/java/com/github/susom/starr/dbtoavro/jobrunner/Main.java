@@ -147,6 +147,8 @@ public class Main {
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
+      long start;
+      start = System.nanoTime();
       new JobRunner(config, job)
           .run()
           .doOnError(error -> {
@@ -155,6 +157,7 @@ public class Main {
             exit(1);
           })
           .blockingAwait();
+      System.out.println( (System.nanoTime() - start)/1000000000);
 
     } catch (OptionException ex) {
       parser.printHelpOn(System.out);

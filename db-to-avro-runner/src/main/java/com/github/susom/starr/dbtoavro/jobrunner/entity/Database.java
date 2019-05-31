@@ -48,6 +48,7 @@ public class Database {
         public String name;
         public transient String tempName;
         public long rows;
+        public long bytes;
         public List<Column> columns = new ArrayList<>();
 
         public Table(String name) {

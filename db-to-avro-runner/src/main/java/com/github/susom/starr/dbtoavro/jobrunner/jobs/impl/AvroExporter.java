@@ -10,6 +10,8 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,15 +22,25 @@ public class AvroExporter implements Exporter {
   private final Config config;
   private final String filePattern;
   private final int avroRows;
+  private final long threshold;
+  private final int cores;
 
   public AvroExporter(Config config) {
     this.config = config;
     this.avroRows = config.getInteger("avro.rows", 100000);
+    this.threshold = config.getLong("avro.split.threshold", 25000000);
     this.filePattern = config.getString("avro.filename", "%{SCHEMA}.%{TABLE}-%{PART}.avro");
+    this.cores = Runtime.getRuntime().availableProcessors();
   }
 
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
+
+    // Create schedulers for various tasks based on number of cores
+    ExecutorService smallTblSched = Executors.newFixedThreadPool(cores);
+    ExecutorService splitTblSched = Executors.newFixedThreadPool(cores >= 4 ? cores / 4 : 2);
+    ExecutorService copyTblSched = Executors.newFixedThreadPool(cores >= 8 ? cores / 8 : 2);
+
     return loader.run(job)
         .flatMapObservable(database -> {
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config);
@@ -41,30 +53,32 @@ public class AvroExporter implements Exporter {
                   .filter(schemas -> job.schemas.contains(schemas.name)) // filter out unwanted schemas
                   .flatMap(schema -> Observable.fromIterable(schema.tables)
                       .flatMap(table -> {
-                            if (table.rows > avroRows) {
-                              return avroFns.getRanges(table, table.rows / avroRows)
+                        if (table.bytes > threshold) {
+                          return
+                              avroFns.getRanges(table,
+                                  Math.floorDiv(table.bytes, threshold) > 1 ? Math.floorDiv(table.bytes, threshold) : 2)
+                                  .subscribeOn(Schedulers.from(copyTblSched))
                                   .toFlowable(BackpressureStrategy.BUFFER)
                                   .parallel()
-                                  .runOn(Schedulers.computation())
+                                  .runOn(Schedulers.from(splitTblSched))
                                   .flatMap(
-                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern).toFlowable())
+                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                          .toFlowable())
                                   .sequential()
                                   .doOnComplete(() -> avroFns.cleanup(table))
-                                  .toObservable()
-                                  .doOnNext(file -> LOGGER.info("Wrote {}", file.path))
-                                  .subscribeOn(
-                                      Schedulers
-                                          .computation()); // run in io thread pool, while rows export in computation pool
-                            } else {
-                              return avroFns.saveAsAvro(table, job.destination + filePattern).toObservable()
-                                  .doOnNext(file -> LOGGER.info("Wrote {}", file.path))
-                                  .subscribeOn(Schedulers.computation()); // run in io thread pool
-                            }
-                          }
-                      )
+                                  .toObservable();
+                        } else {
+                          return avroFns.saveAsAvro(table, job.destination + filePattern)
+                              .toObservable()
+                              .subscribeOn(Schedulers.from(smallTblSched));
+                        }
+                      })
                   )
               );
-        });
+        })
+        .doOnComplete(smallTblSched::shutdown)
+        .doOnComplete(splitTblSched::shutdown)
+        .doOnComplete(copyTblSched::shutdown);
   }
 
 }

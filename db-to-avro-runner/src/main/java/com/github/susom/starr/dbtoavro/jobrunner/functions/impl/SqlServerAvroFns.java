@@ -3,9 +3,9 @@ package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 import com.github.susom.database.Config;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table.Column;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 public class SqlServerAvroFns implements AvroFns {
 
-  private static final String TABLE_SUFFIX = "_TEMP";
+  private static final String TEMP_SUFFIX = "_XSPLITX";
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
 
   private static int[] supported = {
@@ -65,36 +65,38 @@ public class SqlServerAvroFns implements AvroFns {
   private TempMinMax makeTempTable(final Table table) {
     TempMinMax tmm = new TempMinMax();
     dbb.withConnectionAccess().transact(db -> {
-      String altName = table.name + TABLE_SUFFIX;
+      String altName = table.name + TEMP_SUFFIX;
       String catalog = table.getSchema().getCatalog().name;
       String schema = table.getSchema().name;
 
       db.get().underlyingConnection().setCatalog(catalog);
 
-      db.get().ddl(String.format(Locale.CANADA, "DROP TABLE IF EXISTS %s.%s_TEMP", schema, table.name)).execute();
+      db.get().ddl(String.format(Locale.CANADA, "DROP TABLE IF EXISTS %s.%s", schema, altName)).execute();
 
       db.get().ddl(String.format(Locale.CANADA,
           // For the splitting column, a random 8-bit positive integer is created. This is much faster than using
           // an identity column as SQL server will copy the table in parallel, identity will force a single thread.
           // Note this does mean the order of rows from the original table is lost during the export.
-          "SELECT *, ABS(CAST(CAST(NEWID() AS BINARY(8)) AS INT)) AS xSPLIT_IDx INTO %1$s.%2$s_TEMP FROM %1$s.%2$s",
-          schema, table.name)).execute();
+          "SELECT *, ABS(CAST(CAST(NEWID() AS BINARY(8)) AS INT)) AS XSPLIT_IDX INTO %1$s.%2$s%3$s FROM %1$s.%2$s",
+          schema, table.name, TEMP_SUFFIX)).execute();
 
       db.get().ddl(String.format(Locale.CANADA,
-          "CREATE CLUSTERED INDEX IX_%2$s_SPLIT_ID ON %1$s.%2$s (xSPLIT_IDx)", schema, altName))
+          "CREATE CLUSTERED INDEX IX_SPLIT_ID ON %s.%s (XSPLIT_IDX)", schema, altName))
           .execute();
 
       tmm.min = db.get()
           .toSelect(
-              String.format(Locale.CANADA, "SELECT MIN(xSPLIT_IDx) FROM %s.%s", schema, altName))
+              String.format(Locale.CANADA, "SELECT MIN(XSPLIT_IDX) FROM %s.%s", schema, altName))
           .queryLongOrZero();
 
       tmm.max = db.get()
           .toSelect(
-              String.format(Locale.CANADA, "SELECT MAX(xSPLIT_IDx) FROM %s.%s", schema, altName))
+              String.format(Locale.CANADA, "SELECT MAX(XSPLIT_IDX) FROM %s.%s", schema, altName))
           .queryLongOrZero();
 
       table.tempName = altName;
+      LOGGER.debug("Done splitting table {}", table.name);
+
     });
     return tmm;
   }
@@ -102,10 +104,12 @@ public class SqlServerAvroFns implements AvroFns {
   @Override
   public Observable<Range> getRanges(final Table table, long divisions) {
     return Observable.create(emitter -> {
+      LOGGER.info("Splitting table {} ({}MB) into {} segments", table.name, table.bytes/1000000, divisions);
       try {
         TempMinMax tmm = makeTempTable(table);
         int index = 0;
-        long windowSize = Math.floorDiv(tmm.max - tmm.min, divisions) + 1;
+        long range = tmm.max - tmm.min;
+        long windowSize = Math.floorDiv(range, divisions) + 1;
         long currentRow = tmm.min;
 
         do {
@@ -168,8 +172,10 @@ public class SqlServerAvroFns implements AvroFns {
           .replace("%{START}", String.valueOf(range.start))
           .replace("%{END}", String.valueOf(range.end));
 
+      LOGGER.info("Writing {}", path);
+
       Etl.saveQuery(db.get().toSelect(String
-          .format(Locale.CANADA, "SELECT %s FROM %s.%s WHERE xSPLIT_IDx >= %d AND xSPLIT_IDx %s %d",
+          .format(Locale.CANADA, "SELECT %s FROM %s.%s WHERE XSPLIT_IDX >= %d AND XSPLIT_IDX %s %d",
               String.join(", ", columns), avroFile.table.getSchema().name, tempName, range.start,
               range.terminal ? "<=" : "<",
               range.end))).asAvro(path, schema, avroFile.table.name).withCodec(CodecFactory.snappyCodec())
@@ -197,7 +203,7 @@ public class SqlServerAvroFns implements AvroFns {
       List<String> columns = new ArrayList<>();
       for (Column column : table.columns) {
         if (isSupportedType(column.type)) {
-          columns.add(column.name);
+          columns.add("[" + column.name + "]");
           avroFile.includedRows.add(column.name);
         } else {
           avroFile.omittedRows.add(column.name);
@@ -207,9 +213,12 @@ public class SqlServerAvroFns implements AvroFns {
       String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
           .replace("%{SCHEMA}", schema)
           .replace("%{CATALOG}", catalog)
-          .replace("%{PART}", "000")
+          .replace("-%{PART}", "")
+          .replace("%{PART}-", "")
           .replace("%{START}", "0")
           .replace("%{END}", String.valueOf(table.rows));
+
+      LOGGER.info("Writing {}", path);
 
       Etl.saveQuery(
           db.get().toSelect(
