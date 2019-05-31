@@ -15,29 +15,30 @@
  *
  */
 
-package com.github.susom.starr.dbtoavro.jobrunner.runner;
+package com.github.susom.starr.dbtoavro.jobrunner;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExport;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExporter;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import io.reactivex.Completable;
-import io.reactivex.Single;
+import java.io.PrintStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Master job runner
  */
-public abstract class JobRunner implements JobLogger {
+public class JobRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
 
-  protected Job job;
+  private Job job;
   private Config config;
 
   public JobRunner(Config config, Job job) {
@@ -52,34 +53,36 @@ public abstract class JobRunner implements JobLogger {
    */
   public Completable run() {
 
-    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    String outputFile = config.getString("avro.logfile", "log.json");
 
-    Single<Warehouse> warehouse;
+    Loader loader;
     switch (job.flavor) {
-      case "sqlserver":
+      case sqlserver:
         if (job.connection == null) {
-          log("Starting sql server database restore");
-          warehouse = new SqlServerLoadBackup(config).run(job, this);
+          loader = new SqlServerLoadBackup(config);
         } else {
-          log("Using existing sql server database");
-          warehouse = new SqlServerLoadExisting(config).run(job, this);
+          loader = new SqlServerLoadExisting(config);
         }
         break;
       default:
-        return Completable.error(new IllegalArgumentException("Unimplemented database flavor " + job.flavor));
+        return Completable.error(new IllegalArgumentException("Unimplemented database " + job.flavor));
     }
 
     if (job.destination != null) {
-      return new AvroExport(warehouse.blockingGet(), config).run(job, this)
+      Gson gson = new GsonBuilder().setPrettyPrinting().create();
+      return new AvroExporter(config).run(job, loader)
           .toList()
-          .map(gson::toJson)
-          .doOnSuccess(json -> {
-            log("\"AvroFiles\": ");
-            log(json);
+          .doOnSuccess(avros -> {
+            JsonObject json = new JsonObject();
+            json.add("AvroFiles", gson.toJsonTree(avros));
+            try (PrintStream ps = new PrintStream(outputFile)) {
+              ps.println(gson.toJson(json));
+            }
+            LOGGER.info("Wrote output to {}", outputFile);
           })
           .ignoreElement();
     } else {
-      log("No destination, not exporting avro");
+      LOGGER.info("No destination, not exporting avro");
       return Completable.complete();
     }
 

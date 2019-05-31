@@ -1,7 +1,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import io.reactivex.Observable;
 import io.reactivex.Single;

@@ -7,13 +7,13 @@ import java.util.List;
 /**
  * Simple pojo describing a restored database server running in docker
  */
-public class Warehouse {
+public class Database {
 
   public String containerId;
   public Flavor flavor;
   public List<Catalog> catalogs = new ArrayList<>();
 
-  public Warehouse(String containerId) {
+  public Database(String containerId) {
     this.containerId = containerId;
   }
 
@@ -26,8 +26,8 @@ public class Warehouse {
       this.name = name;
     }
 
-    public Warehouse getDatabase() {
-      return Warehouse.this;
+    public Database getDatabase() {
+      return Database.this;
     }
 
     public class Schema {
@@ -48,7 +48,6 @@ public class Warehouse {
         public String name;
         public transient String tempName;
         public long rows;
-        public long bytes;
         public List<Column> columns = new ArrayList<>();
 
         public Table(String name) {

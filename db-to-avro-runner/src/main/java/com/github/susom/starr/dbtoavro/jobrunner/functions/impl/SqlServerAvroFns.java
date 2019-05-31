@@ -4,8 +4,8 @@ import com.github.susom.database.Config;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table.Column;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table.Column;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
@@ -162,7 +162,8 @@ public class SqlServerAvroFns implements AvroFns {
       }
 
       String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
-          .replace("%{SCHEMA}", avroFile.table.getSchema().name)
+          .replace("%{SCHEMA}", schema)
+          .replace("%{CATALOG}", catalog)
           .replace("%{PART}", String.format("%03d", range.index))
           .replace("%{START}", String.valueOf(range.start))
           .replace("%{END}", String.valueOf(range.end));
@@ -204,7 +205,8 @@ public class SqlServerAvroFns implements AvroFns {
       }
 
       String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
-          .replace("%{SCHEMA}", avroFile.table.getSchema().name)
+          .replace("%{SCHEMA}", schema)
+          .replace("%{CATALOG}", catalog)
           .replace("%{PART}", "000")
           .replace("%{START}", "0")
           .replace("%{END}", String.valueOf(table.rows));

@@ -18,12 +18,12 @@
 package com.github.susom.starr.dbtoavro.jobrunner.jobs.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.Load;
-import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
 import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
@@ -31,47 +31,56 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Restores an SQL server database from a backup file
  */
-public class SqlServerLoadBackup extends Load {
+public class SqlServerLoadBackup implements Loader {
 
-  private SqlServerDockerFns docker;
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerLoadBackup.class);
+
+  private DockerFns docker;
   private SqlServerDatabaseFns db;
+  private Config config;
 
   public SqlServerLoadBackup(Config config) {
-    super(config);
+    this.config = config;
     this.db = new SqlServerDatabaseFns(config);
   }
 
   @Override
-  public Single<Warehouse> run(Job job, JobLogger logger) {
+  public Single<Database> run(Job job) {
+
+    LOGGER.info("Starting sql server database restore");
 
     // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
     mounts.add(new File(job.backupDir) + ":/backup");
-    docker = new SqlServerDockerFns(config, mounts);
 
-    return docker.create().flatMap(containerId ->
+    docker = new SqlServerDockerFns(config);
+
+    return docker.create(mounts).flatMap(containerId ->
         docker.start(containerId)
-            .doOnComplete(() -> logger
-                .log(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
+            .doOnComplete(() -> LOGGER
+                .info(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
             .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(3, 2000)))
             .andThen(db.transact(job.preSql))
-            .doOnComplete(() -> logger.log("Database pre-sql completed"))
-            .doOnComplete(() -> logger.log("Starting database restore"))
+            .doOnComplete(() -> LOGGER.info("Database pre-sql completed"))
+            .doOnComplete(() -> LOGGER.info("Starting database restore"))
             .andThen(db.getRestoreSql(job.catalog, job.backupFiles)
                 .flatMapObservable(ddl ->
                     docker.execSqlShell(containerId, ddl)
                         .observeOn(Schedulers.io()))
-                .filter(p -> p.getPercent() != -1)
-                .doOnNext(p -> logger.progress(p.getPercent(), 100)).ignoreElements()
-                .doOnComplete(() -> logger.log("Restore completed"))
+                .doOnNext(p -> LOGGER.info(p.getData()))
+                .ignoreElements()
+                .doOnComplete(() -> LOGGER.info("Restore completed"))
                 .andThen(db.transact(job.postSql))
-                .doOnComplete(() -> logger.log("Database post-sql completed, introspecting database"))
+                .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
                 .andThen(db.getDatabase(containerId))
-                .doFinally(() -> logger.log("Database introspection complete"))
+                .doFinally(() -> LOGGER.info("Database introspection complete"))
             )
     );
   }

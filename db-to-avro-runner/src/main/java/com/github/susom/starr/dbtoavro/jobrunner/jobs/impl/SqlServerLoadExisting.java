@@ -18,32 +18,37 @@
 package com.github.susom.starr.dbtoavro.jobrunner.jobs.impl;
 
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.Load;
-import com.github.susom.starr.dbtoavro.jobrunner.runner.JobLogger;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import io.reactivex.Single;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Loads an already existing SQL server instance
  */
-public class SqlServerLoadExisting extends Load {
+public class SqlServerLoadExisting implements Loader {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerLoadExisting.class);
 
   private SqlServerDatabaseFns db;
+  private Config config;
 
   public SqlServerLoadExisting(Config config) {
-    super(config);
+    this.config = config;
     this.db = new SqlServerDatabaseFns(config);
   }
 
   @Override
-  public Single<Warehouse> run(Job job, JobLogger logger) {
+  public Single<Database> run(Job job) {
+    LOGGER.info("Using existing sql server database");
     return
         db.transact(job.postSql)
-            .doOnComplete(() -> logger.log("Database post-sql completed, introspecting database"))
+            .doOnComplete(() -> LOGGER.info("Database post-sql completed, introspecting database"))
             .andThen(db.getDatabase(null))
-            .doFinally(() -> logger.log("Database introspection complete"));
+            .doFinally(() -> LOGGER.info("Database introspection complete"));
   }
 
 }

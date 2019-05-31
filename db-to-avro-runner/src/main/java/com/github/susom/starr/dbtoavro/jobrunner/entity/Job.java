@@ -18,6 +18,7 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
+import com.github.susom.database.Flavor;
 import java.util.List;
 
 /**
@@ -32,12 +33,12 @@ public class Job {
   public final List<String> schemas;
   public final String postSql;
   public final String preSql;
-  public final String flavor;
+  public final Flavor flavor;
   public final String destination;
   public final String connection;
 
   private Job(long id, List<String> backupFiles, String backupDir, String catalog, List<String> schemas,
-      String postSql, String preSql, String flavor, String destination, String connection) {
+      String postSql, String preSql, Flavor flavor, String destination, String connection) {
     this.id = id;
     this.backupFiles = backupFiles;
     this.backupDir = backupDir;
@@ -72,7 +73,7 @@ public class Job {
     private List<String> schemas;
     private String postSql;
     private String preSql;
-    private String flavor;
+    private Flavor flavor;
     private String destination;
     private String connection;
 
@@ -118,7 +119,7 @@ public class Job {
       return this;
     }
 
-    public Builder flavor(String type) {
+    public Builder flavor(Flavor type) {
       this.flavor = type;
       return this;
     }

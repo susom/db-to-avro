@@ -59,7 +59,7 @@ public interface DockerService {
    * @param containerId containerId for logs
    * @param follow keep following logs
    * @param numberOfLines number of lines to retrieve
-   * @return observable of log output
+   * @return observable of notify output
    */
   Observable<ConsoleOutput> logs(String containerId, boolean follow, int numberOfLines);
 

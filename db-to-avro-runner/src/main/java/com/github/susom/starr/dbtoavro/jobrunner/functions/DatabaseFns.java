@@ -17,7 +17,7 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import io.reactivex.Completable;
 import io.reactivex.Single;
 
@@ -38,6 +38,6 @@ public interface DatabaseFns {
    * @param containerId running database
    * @return database object
    */
-  Single<Warehouse> getDatabase(String containerId);
+  Single<Database> getDatabase(String containerId);
 
 }

@@ -22,9 +22,9 @@ import static java.lang.System.exit;
 
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
+import com.github.susom.database.Flavor;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job.Builder;
-import com.github.susom.starr.dbtoavro.jobrunner.runner.ConsoleJobRunner;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -47,7 +47,7 @@ public class Main {
 
   public static void main(String[] args) {
     // Make sure we use the real console for error logging here because something
-    // might have gone wrong during log config or console redirection
+    // might have gone wrong during notify config or console redirection
     PrintStream err = System.err;
     try {
       new Main().launch(args);
@@ -90,9 +90,10 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
-    OptionSpec<String> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
+    OptionSpec<Flavor> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
         .withRequiredArg()
-        .required();
+        .required()
+        .ofType(Flavor.class);
     OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
@@ -100,6 +101,7 @@ public class Main {
     //  switches for deleting docker container after successful export
     //  switches for listing catalogs, schemas, and tables
     //  switch for testing connection to db
+    //  switch for setting file name pattern
 
     try {
 
@@ -145,7 +147,7 @@ public class Main {
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
-      new ConsoleJobRunner(config, job)
+      new JobRunner(config, job)
           .run()
           .doOnError(error -> {
             System.err.println("Job failed!");

@@ -18,10 +18,10 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
@@ -39,7 +39,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
-  DatabaseProviderRx.Builder dbb;
+  private DatabaseProviderRx.Builder dbb;
 
   public SqlServerDatabaseFns(Config config) {
     dbb = DatabaseProviderRx
@@ -50,36 +50,36 @@ public class SqlServerDatabaseFns implements DatabaseFns {
 
   @Override
   public Completable transact(String sql) {
-    if (sql == null) return Completable.complete();
+    if (sql == null) {
+      return Completable.complete();
+    }
     return dbb.transactRx(db -> {
       db.get().ddl(sql).execute();
     });
   }
 
   @Override
-  public Single<Warehouse> getDatabase(String containerId) {
-
-    // TODO: This can be parallelized!
-    // TODO: Needs to log output, since this can take a LONG time
-    // TODO: Remove getting table sizes? it's not used, really.
-
+  public Single<Database> getDatabase(String containerId) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      Warehouse database = new Warehouse(containerId);
+
+      LOGGER.info("Introspecting database");
+      Database database = new Database(containerId);
       database.flavor = db.get().flavor();
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-      // Retrieve catalogs
+
+      // Retrieve catalogs, except built-ins
       ResultSet catalogs = metadata.getCatalogs();
       while (catalogs.next()) {
         String catalogName = catalogs.getString(1);
         if (catalogName.equals("master") || catalogName.equals("msdb") || catalogName.equals("tempdb")) {
           continue;
         }
-        Warehouse.Catalog catalog = database.new Catalog(catalogName);
+        Database.Catalog catalog = database.new Catalog(catalogName);
         // Retrieve schemas
         ResultSet schemas = metadata.getSchemas(catalogName, null);
         while (schemas.next()) {
           String schemaName = schemas.getString(1);
-          Warehouse.Catalog.Schema schema = catalog.new Schema(schemaName);
+          Database.Catalog.Schema schema = catalog.new Schema(schemaName);
           if (schemaName.equals("sys") || schemaName.startsWith("db_") || schemaName.equals("guest") || schemaName
               .equals("INFORMATION_SCHEMA")) {
             continue;
@@ -88,7 +88,8 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           ResultSet tables = metadata.getTables(catalogName, schemaName, null, new String[]{"TABLE"});
           while (tables.next()) {
             String tableName = tables.getString(3);
-            Warehouse.Catalog.Schema.Table table = schema.new Table(tableName);
+            LOGGER.info("Introspecting table {}.{}.{}", catalogName, schemaName, tableName);
+            Database.Catalog.Schema.Table table = schema.new Table(tableName);
             ResultSet columns = metadata.getColumns(catalogName, schemaName, tableName, "%");
             while (columns.next()) {
               String name = columns.getString(4);
@@ -102,32 +103,12 @@ public class SqlServerDatabaseFns implements DatabaseFns {
         database.catalogs.add(catalog);
       }
 
-      // Get row counts and table sizes
+      // Get row counts
       for (Catalog catalog : database.catalogs) {
         db.get().underlyingConnection().setCatalog(catalog.name);
         for (Schema schema : catalog.schemas) {
           db.get().underlyingConnection().setSchema(schema.name);
-          /*
-          // Table for storing table size information from stored procedure
-          db.get().ddl("DROP TABLE IF EXISTS master.dbo.table_sizes").execute();
-          db.get().ddl("CREATE TABLE master.dbo.table_sizes (\n"
-              + "    name nvarchar(128),\n"
-              + "    rows char(20),\n"
-              + "    reserved varchar(18),\n"
-              + "    data varchar(18),\n"
-              + "    index_size varchar(18),\n"
-              + "    unused varchar(18)\n"
-              + ")").execute();
-           */
           for (Table table : schema.tables) {
-            /*db.get().ddl(
-                "INSERT INTO master.dbo.table_sizes EXEC ('sp_spaceused N''" + schema.name + "." + table.name + "''')")
-                .execute();
-            table.bytes =
-                1024 * Long.parseLong(db.get().toSelect("SELECT data FROM master.dbo.table_sizes WHERE name = ?")
-                    .argString(table.name)
-                    .queryStringOrEmpty().replace(" KB", ""));
-             */
             table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
                 + "FROM sys.objects OBJECTS\n"
                 + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
