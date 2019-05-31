@@ -107,6 +107,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
         db.get().underlyingConnection().setCatalog(catalog.name);
         for (Schema schema : catalog.schemas) {
           db.get().underlyingConnection().setSchema(schema.name);
+          /*
           // Table for storing table size information from stored procedure
           db.get().ddl("DROP TABLE IF EXISTS master.dbo.table_sizes").execute();
           db.get().ddl("CREATE TABLE master.dbo.table_sizes (\n"
@@ -117,14 +118,16 @@ public class SqlServerDatabaseFns implements DatabaseFns {
               + "    index_size varchar(18),\n"
               + "    unused varchar(18)\n"
               + ")").execute();
+           */
           for (Table table : schema.tables) {
-            db.get().ddl(
+            /*db.get().ddl(
                 "INSERT INTO master.dbo.table_sizes EXEC ('sp_spaceused N''" + schema.name + "." + table.name + "''')")
                 .execute();
             table.bytes =
                 1024 * Long.parseLong(db.get().toSelect("SELECT data FROM master.dbo.table_sizes WHERE name = ?")
                     .argString(table.name)
                     .queryStringOrEmpty().replace(" KB", ""));
+             */
             table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
                 + "FROM sys.objects OBJECTS\n"
                 + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
@@ -138,6 +141,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           }
         }
       }
+
       return database;
     }).toSingle();
   }

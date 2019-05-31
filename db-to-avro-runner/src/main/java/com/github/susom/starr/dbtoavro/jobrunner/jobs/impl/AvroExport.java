@@ -38,11 +38,11 @@ public class AvroExport extends Export {
                             .doOnComplete(() -> avroFns.cleanup(table))
                             .toObservable()
                             .doOnNext(file -> logger.log(file.path))
-                            .subscribeOn(Schedulers.io()); // run in io thread pool, while rows export in computation pool
+                            .subscribeOn(Schedulers.computation()); // run in io thread pool, while rows export in computation pool
                       } else {
                         return avroFns.saveAsAvro(table, job.destination + filePattern).toObservable()
                             .doOnNext(file -> logger.log(file.path))
-                            .subscribeOn(Schedulers.io()); // run in io thread pool
+                            .subscribeOn(Schedulers.computation()); // run in io thread pool
                       }
                     }
                 )

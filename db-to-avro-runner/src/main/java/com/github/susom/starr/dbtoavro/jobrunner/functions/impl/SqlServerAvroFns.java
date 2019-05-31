@@ -3,9 +3,9 @@ package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 import com.github.susom.database.Config;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Warehouse.Catalog.Schema.Table.Column;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Range;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
@@ -70,6 +70,8 @@ public class SqlServerAvroFns implements AvroFns {
       String schema = table.getSchema().name;
 
       db.get().underlyingConnection().setCatalog(catalog);
+
+      db.get().ddl(String.format(Locale.CANADA, "DROP TABLE IF EXISTS %s.%s_TEMP", schema, table.name)).execute();
 
       db.get().ddl(String.format(Locale.CANADA,
           // For the splitting column, a random 8-bit positive integer is created. This is much faster than using
