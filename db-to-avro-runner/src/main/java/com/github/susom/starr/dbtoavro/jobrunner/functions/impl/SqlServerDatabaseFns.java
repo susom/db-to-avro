@@ -18,17 +18,19 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Column;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
+import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.sql.CallableStatement;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Sql-server specific SQL statements, for various database tasks
  */
+@SuppressWarnings("Duplicates")
 public class SqlServerDatabaseFns implements DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
@@ -62,105 +65,96 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   }
 
   @Override
+  public Observable<String> getCatalogs(Database database) {
+    return Observable.create(emitter -> {
+      dbb.withConnectionAccess().transact(db -> {
+        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+        ResultSet catalogs = metadata.getCatalogs();
+        while (catalogs.next()) {
+          emitter.onNext(catalogs.getString(1));
+        }
+        emitter.onComplete();
+      });
+    });
+  }
+
+  @Override
+  public Observable<String> getSchemas(String catalog) {
+    return Observable.create(emitter -> {
+      dbb.withConnectionAccess().transact(db -> {
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+      ResultSet schemas = metadata.getSchemas(catalog, null);
+      while (schemas.next()) {
+        emitter.onNext(schemas.getString(1));
+      }
+        emitter.onComplete();
+      });
+    });
+  }
+
+  @Override
+  public Observable<Table> getTables(String catalog, String schema) {
+    return Observable.create(emitter -> {
+      dbb.withConnectionAccess().transact(db -> {
+        db.get().underlyingConnection().setCatalog(catalog);
+        db.get().underlyingConnection().setSchema(schema);
+        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
+        while (tables.next()) {
+          String name = tables.getString(3);
+          List<Column> cols = new ArrayList<>();
+          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
+          while (columns.next()) {
+            String colName = columns.getString(4);
+            int type = columns.getInt(5);
+            cols.add(new Column(colName, type));
+          }
+          // Get primary keys
+          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
+          while (pks.next()) {
+            String colName = pks.getString(4);
+            short seq = pks.getShort(5);
+            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> {
+              c.isPrimaryKey = true;
+            });
+          }
+          // Get bytes
+          long bytes = 0;
+          try (CallableStatement spaceUsed = db.get().underlyingConnection()
+              .prepareCall("{call sp_spaceused(?)}")) {
+            spaceUsed.setString(1, schema + "." + name);
+            if (spaceUsed.execute()) {
+              ResultSet rs = spaceUsed.getResultSet();
+              while (rs.next()) {
+                bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+              }
+            }
+          } catch (SQLException ignored) {
+          }
+          // Get rows
+          long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+              + "FROM sys.objects OBJECTS\n"
+              + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+              + "WHERE OBJECTS.type = 'U'\n"
+              + "  AND PARTITIONS.index_id < 2\n"
+              + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+              + "  AND OBJECTS.Name = ?")
+              .argString(schema)
+              .argString(name)
+              .queryLongOrZero();
+          emitter.onNext(new Table(catalog, schema, name, bytes, rows, cols));
+        }
+        emitter.onComplete();
+      });
+    });
+  }
+
+  @Override
   public Single<Database> getDatabase(String containerId) {
     return dbb.withConnectionAccess().transactRx(db -> {
-
       LOGGER.info("Introspecting database");
       Database database = new Database(containerId);
       database.flavor = db.get().flavor();
-      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-
-      // Retrieve catalogs, except built-ins
-      ResultSet catalogs = metadata.getCatalogs();
-      while (catalogs.next()) {
-        String catalogName = catalogs.getString(1);
-        if (catalogName.equals("master") || catalogName.equals("msdb") || catalogName.equals("tempdb")) {
-          continue;
-        }
-        Database.Catalog catalog = database.new Catalog(catalogName);
-        // Retrieve schemas
-        ResultSet schemas = metadata.getSchemas(catalogName, null);
-        while (schemas.next()) {
-          String schemaName = schemas.getString(1);
-          Database.Catalog.Schema schema = catalog.new Schema(schemaName);
-          if (schemaName.equals("sys") || schemaName.startsWith("db_") || schemaName.equals("guest") || schemaName
-              .equals("INFORMATION_SCHEMA")) {
-            continue;
-          }
-          // Retrieve tables and their column information
-          ResultSet tables = metadata.getTables(catalogName, schemaName, null, new String[]{"TABLE"});
-          while (tables.next()) {
-            String tableName = tables.getString(3);
-            if (tableName.contains(TEMP_SUFFIX)) {
-              continue;
-            }
-            LOGGER.info("Introspecting table {}.{}.{}", catalogName, schemaName, tableName);
-            Database.Catalog.Schema.Table table = schema.new Table(tableName);
-
-            ResultSet columns = metadata.getColumns(catalogName, schemaName, tableName, "%");
-            while (columns.next()) {
-              String name = columns.getString(4);
-              int type = columns.getInt(5);
-              table.columns.add(table.new Column(name, type));
-            }
-
-            // Get primary keys
-            ResultSet pks = metadata.getPrimaryKeys(catalogName, schemaName, tableName);
-            while (pks.next()) {
-              String name = pks.getString(4);
-              short seq = pks.getShort(5);
-              table.columns.stream().filter(c -> c.name.equals(name)).forEach(c -> {
-                c.pk = true;
-                c.ordinal = seq;
-              });
-            }
-
-            schema.tables.add(table);
-          }
-          catalog.schemas.add(schema);
-        }
-        database.catalogs.add(catalog);
-      }
-
-      // Get row counts and space used
-      LOGGER.info("Getting table size information");
-      for (Catalog catalog : database.catalogs) {
-        db.get().underlyingConnection().setCatalog(catalog.name);
-        for (Schema schema : catalog.schemas) {
-          db.get().underlyingConnection().setSchema(schema.name);
-          schema.tables
-              .parallelStream()
-              .forEach(table -> {
-
-                // Get number of rows
-                table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-                    + "FROM sys.objects OBJECTS\n"
-                    + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-                    + "WHERE OBJECTS.type = 'U'\n"
-                    + "  AND PARTITIONS.index_id < 2\n"
-                    + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-                    + "  AND OBJECTS.Name = ?")
-                    .argString(schema.name)
-                    .argString(table.name)
-                    .queryLongOrZero();
-
-                // Get space used in bytes
-                try (CallableStatement spaceUsed = db.get().underlyingConnection()
-                    .prepareCall("{call sp_spaceused(?)}")) {
-                  spaceUsed.setString(1, schema.name + "." + table.name);
-                  if (spaceUsed.execute()) {
-                    ResultSet rs = spaceUsed.getResultSet();
-                    while (rs.next()) {
-                      table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
-                    }
-                  }
-                } catch (SQLException ignored) {
-                }
-
-              });
-        }
-      }
-
       return database;
     }).toSingle();
   }

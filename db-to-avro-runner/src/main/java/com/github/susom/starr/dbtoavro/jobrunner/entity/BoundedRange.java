@@ -1,7 +1,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
 /**
- * Stores two SQL objects which represent the upper (inclusive) and lower (exclusive) bounding ranges of a table extract
+ * Stores two SQL objects which represent the upper (inclusive) and lower (exclusive) bounding ranges of a table segment
  */
 public class BoundedRange {
 
@@ -9,10 +9,6 @@ public class BoundedRange {
   public SqlObject upper;
   public long index;
   public boolean terminal;
-
-  public BoundedRange(int index) {
-    this.index = index;
-  }
 
   public BoundedRange(SqlObject lower, SqlObject upper, int index) {
     this.lower = lower;

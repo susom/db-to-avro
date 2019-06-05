@@ -18,7 +18,9 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Completable;
+import io.reactivex.Observable;
 import io.reactivex.Single;
 
 public interface DatabaseFns {
@@ -39,4 +41,15 @@ public interface DatabaseFns {
    */
   Single<Database> getDatabase(String containerId);
 
-}
+  /**
+   * Get catalogs in database
+   * @param database database to query
+   * @return observable of catalogs
+   */
+  Observable<String> getCatalogs(Database database);
+
+  Observable<String> getSchemas(String catalog);
+
+  Observable<Table> getTables(String catalog, String schema);
+
+  }

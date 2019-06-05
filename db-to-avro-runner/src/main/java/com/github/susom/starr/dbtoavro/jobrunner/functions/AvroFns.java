@@ -2,7 +2,7 @@ package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.BoundedRange;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 
@@ -33,12 +33,5 @@ public interface AvroFns {
    * @return observable of range
    */
   Observable<BoundedRange> getTableRanges(final Table table, long divisions);
-
-  /**
-   * Clean up any temporary files or data after exporting a table
-   *
-   * @param table table that has finished export
-   */
-  void cleanup(final Table table);
 
 }

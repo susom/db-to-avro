@@ -1,6 +1,5 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Database.Catalog.Schema.Table;
 import java.util.ArrayList;
 import java.util.List;
 

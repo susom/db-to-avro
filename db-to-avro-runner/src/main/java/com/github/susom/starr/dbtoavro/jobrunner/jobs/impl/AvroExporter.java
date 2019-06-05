@@ -4,6 +4,7 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Exporter;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
@@ -44,15 +45,15 @@ public class AvroExporter implements Exporter {
     return loader.run(job)
         .flatMapObservable(database -> {
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config);
-          if (avroFns == null) {
+          DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config);
+          if (avroFns == null || dbFns == null) {
             return Observable.error(new Exception("Unsupported database flavor!"));
           }
-          return Observable.fromIterable(database.catalogs)
-              .filter(catalog -> job.catalog.equals(catalog.name)) // filter out unwanted databases
-              .flatMap(catalog -> Observable.fromIterable(catalog.schemas)
-                  .filter(schemas -> job.schemas.contains(schemas.name)) // filter out unwanted schemas
-                  .flatMap(schema -> Observable.fromIterable(schema.tables)
-                      .filter(table -> table.bytes > threshold)
+          return dbFns.getCatalogs(database)
+              .filter(job.catalog::equals) // filter out unwanted databases
+              .flatMap(catalog -> dbFns.getSchemas(catalog)
+                  .filter(job.schemas::contains) // filter out unwanted schemas
+                  .flatMap(schema -> dbFns.getTables(catalog, schema)
                       .flatMap(table -> {
                         if (table.bytes > threshold) {
                           return
@@ -62,10 +63,10 @@ public class AvroExporter implements Exporter {
                                   .toFlowable(BackpressureStrategy.BUFFER)
                                   .parallel()
                                   .runOn(Schedulers.from(avroSched))
-                                  .flatMap(range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
-                                      .toFlowable())
+                                  .flatMap(
+                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                          .toFlowable())
                                   .sequential()
-                                  .doOnComplete(() -> avroFns.cleanup(table))
                                   .toObservable();
                         } else {
                           return avroFns.saveAsAvro(table, job.destination + filePattern)
