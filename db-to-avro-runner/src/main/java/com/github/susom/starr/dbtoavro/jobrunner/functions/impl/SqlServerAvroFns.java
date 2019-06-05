@@ -12,6 +12,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
 import io.reactivex.Single;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -241,6 +242,8 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argInteger((Integer) bounds.lower.getValue());
       } else if (bounds.lower.getValue() instanceof java.lang.Short) {
         sql.argInteger(Integer.valueOf((Short) bounds.lower.getValue()));
+      } else if (bounds.lower.getValue() instanceof java.math.BigDecimal) {
+        sql.argBigDecimal((BigDecimal) bounds.lower.getValue());
       } else {
         LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.lower.getValue().getClass());
       }
@@ -256,6 +259,8 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argInteger((Integer) bounds.upper.getValue());
       } else if (bounds.upper.getValue() instanceof java.lang.Short) {
         sql.argInteger(Integer.valueOf((Short) bounds.upper.getValue()));
+      } else if (bounds.upper.getValue() instanceof java.math.BigDecimal) {
+        sql.argBigDecimal((BigDecimal) bounds.upper.getValue());
       } else {
         LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.upper.getValue().getClass());
       }

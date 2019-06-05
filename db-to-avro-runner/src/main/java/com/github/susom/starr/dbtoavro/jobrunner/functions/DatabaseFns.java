@@ -31,7 +31,6 @@ public interface DatabaseFns {
    */
   Completable transact(String sql);
 
-
   /**
    * Retrieve catalog, schema, table, and row-level information from a database
    *
@@ -39,7 +38,5 @@ public interface DatabaseFns {
    * @return database object
    */
   Single<Database> getDatabase(String containerId);
-
-
 
 }

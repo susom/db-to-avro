@@ -36,13 +36,8 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-      // 64 cores: 90% CPU
-      // 32 cores: 60% CPU
-      // 48 cores: just right?
-
-    ExecutorService avroSched = Executors.newFixedThreadPool(4); // THIS MIGHT BE TOO HIGH if set to cores (64)
-
-    // 15 threads was using 40% CPU
+    ExecutorService avroSched = Executors
+        .newFixedThreadPool((int) (cores * (.75)));
 
     ExecutorService splitSched = Executors.newFixedThreadPool(cores > 4 ? (cores / 4) : 2);
 
@@ -58,33 +53,20 @@ public class AvroExporter implements Exporter {
                   .filter(schemas -> job.schemas.contains(schemas.name)) // filter out unwanted schemas
                   .flatMap(schema -> Observable.fromIterable(schema.tables)
                       .filter(table -> table.bytes > threshold)
-                      .filter(table -> table.name.equals("FactResellerSalesXL_PageCompressed"))
                       .flatMap(table -> {
                         if (table.bytes > threshold) {
                           return
-                              avroFns.getTableRanges(table, Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+                              avroFns.getTableRanges(table,
+                                  Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
                                   .subscribeOn(Schedulers.from(splitSched))
                                   .toFlowable(BackpressureStrategy.BUFFER)
                                   .parallel()
                                   .runOn(Schedulers.from(avroSched))
-                                  .flatMap(range -> avroFns.saveAsAvro(table,  range, job.destination+filePattern)
-                                          .toFlowable())
+                                  .flatMap(range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                      .toFlowable())
                                   .sequential()
                                   .doOnComplete(() -> avroFns.cleanup(table))
                                   .toObservable();
-
-//                              avroFns.getRanges(table,
-//                                  Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
-//                                  .subscribeOn(Schedulers.from(splitSched))
-//                                  .toFlowable(BackpressureStrategy.BUFFER)
-//                                  .parallel()
-//                                  .runOn(Schedulers.from(avroSched))
-//                                  .flatMap(
-//                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
-//                                          .toFlowable())
-//                                  .sequential()
-//                                  .doOnComplete(() -> avroFns.cleanup(table))
-//                                  .toObservable();
                         } else {
                           return avroFns.saveAsAvro(table, job.destination + filePattern)
                               .toObservable()
