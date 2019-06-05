@@ -96,12 +96,25 @@ public class SqlServerDatabaseFns implements DatabaseFns {
             }
             LOGGER.info("Introspecting table {}.{}.{}", catalogName, schemaName, tableName);
             Database.Catalog.Schema.Table table = schema.new Table(tableName);
+
             ResultSet columns = metadata.getColumns(catalogName, schemaName, tableName, "%");
             while (columns.next()) {
               String name = columns.getString(4);
               int type = columns.getInt(5);
               table.columns.add(table.new Column(name, type));
             }
+
+            // Get primary keys
+            ResultSet pks = metadata.getPrimaryKeys(catalogName, schemaName, tableName);
+            while (pks.next()) {
+              String name = pks.getString(4);
+              short seq = pks.getShort(5);
+              table.columns.stream().filter(c -> c.name.equals(name)).forEach(c -> {
+                c.pk = true;
+                c.ordinal = seq;
+              });
+            }
+
             schema.tables.add(table);
           }
           catalog.schemas.add(schema);
@@ -120,16 +133,16 @@ public class SqlServerDatabaseFns implements DatabaseFns {
               .forEach(table -> {
 
                 // Get number of rows
-//                table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-//                    + "FROM sys.objects OBJECTS\n"
-//                    + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-//                    + "WHERE OBJECTS.type = 'U'\n"
-//                    + "  AND PARTITIONS.index_id < 2\n"
-//                    + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-//                    + "  AND OBJECTS.Name = ?")
-//                    .argString(schema.name)
-//                    .argString(table.name)
-//                    .queryLongOrZero();
+                table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+                    + "FROM sys.objects OBJECTS\n"
+                    + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+                    + "WHERE OBJECTS.type = 'U'\n"
+                    + "  AND PARTITIONS.index_id < 2\n"
+                    + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+                    + "  AND OBJECTS.Name = ?")
+                    .argString(schema.name)
+                    .argString(table.name)
+                    .queryLongOrZero();
 
                 // Get space used in bytes
                 try (CallableStatement spaceUsed = db.get().underlyingConnection()

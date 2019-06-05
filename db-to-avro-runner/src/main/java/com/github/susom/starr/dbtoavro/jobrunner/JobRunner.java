@@ -27,6 +27,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import io.reactivex.Completable;
+import java.io.File;
 import java.io.PrintStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class JobRunner {
           .doOnSuccess(avros -> {
             JsonObject json = new JsonObject();
             json.add("AvroFiles", gson.toJsonTree(avros));
-            try (PrintStream ps = new PrintStream(outputFile)) {
+            try (PrintStream ps = new PrintStream(job.destination + File.separator + outputFile)) {
               ps.println(gson.toJson(json));
             }
             LOGGER.info("Wrote output to {}", outputFile);

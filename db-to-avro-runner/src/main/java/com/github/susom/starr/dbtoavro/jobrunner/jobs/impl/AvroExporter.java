@@ -21,14 +21,14 @@ public class AvroExporter implements Exporter {
 
   private final Config config;
   private final String filePattern;
-  private final int avroRows;
   private final long threshold;
+  private final long bytes;
   private final int cores;
 
   public AvroExporter(Config config) {
     this.config = config;
-    this.avroRows = config.getInteger("avro.rows", 100000);
-    this.threshold = config.getLong("avro.split.threshold", 25000000);
+    this.threshold = config.getLong("avro.split.threshold", 1000000000);
+    this.bytes = config.getLong("avro.split.bytes", 250000000);
     this.filePattern = config.getString("avro.filename", "%{SCHEMA}.%{TABLE}-%{PART}.avro");
     this.cores = Runtime.getRuntime().availableProcessors();
   }
@@ -36,10 +36,15 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    // Create schedulers for various tasks based on number of cores
-    ExecutorService smallTblSched = Executors.newFixedThreadPool(cores);
-    ExecutorService splitTblSched = Executors.newFixedThreadPool(cores >= 4 ? cores / 4 : 2);
-    ExecutorService copyTblSched = Executors.newFixedThreadPool(cores >= 8 ? cores / 8 : 2);
+      // 64 cores: 90% CPU
+      // 32 cores: 60% CPU
+      // 48 cores: just right?
+
+    ExecutorService avroSched = Executors.newFixedThreadPool(4); // THIS MIGHT BE TOO HIGH if set to cores (64)
+
+    // 15 threads was using 40% CPU
+
+    ExecutorService splitSched = Executors.newFixedThreadPool(cores > 4 ? (cores / 4) : 2);
 
     return loader.run(job)
         .flatMapObservable(database -> {
@@ -52,33 +57,45 @@ public class AvroExporter implements Exporter {
               .flatMap(catalog -> Observable.fromIterable(catalog.schemas)
                   .filter(schemas -> job.schemas.contains(schemas.name)) // filter out unwanted schemas
                   .flatMap(schema -> Observable.fromIterable(schema.tables)
+                      .filter(table -> table.bytes > threshold)
+                      .filter(table -> table.name.equals("FactResellerSalesXL_PageCompressed"))
                       .flatMap(table -> {
                         if (table.bytes > threshold) {
                           return
-                              avroFns.getRanges(table,
-                                  Math.floorDiv(table.bytes, threshold) > 1 ? Math.floorDiv(table.bytes, threshold) : 2)
-                                  .subscribeOn(Schedulers.from(copyTblSched))
+                              avroFns.getTableRanges(table, Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+                                  .subscribeOn(Schedulers.from(splitSched))
                                   .toFlowable(BackpressureStrategy.BUFFER)
                                   .parallel()
-                                  .runOn(Schedulers.from(splitTblSched))
-                                  .flatMap(
-                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                  .runOn(Schedulers.from(avroSched))
+                                  .flatMap(range -> avroFns.saveAsAvro(table,  range, job.destination+filePattern)
                                           .toFlowable())
                                   .sequential()
                                   .doOnComplete(() -> avroFns.cleanup(table))
                                   .toObservable();
+
+//                              avroFns.getRanges(table,
+//                                  Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+//                                  .subscribeOn(Schedulers.from(splitSched))
+//                                  .toFlowable(BackpressureStrategy.BUFFER)
+//                                  .parallel()
+//                                  .runOn(Schedulers.from(avroSched))
+//                                  .flatMap(
+//                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+//                                          .toFlowable())
+//                                  .sequential()
+//                                  .doOnComplete(() -> avroFns.cleanup(table))
+//                                  .toObservable();
                         } else {
                           return avroFns.saveAsAvro(table, job.destination + filePattern)
                               .toObservable()
-                              .subscribeOn(Schedulers.from(smallTblSched));
+                              .subscribeOn(Schedulers.from(avroSched));
                         }
                       })
                   )
               );
         })
-        .doOnComplete(smallTblSched::shutdown)
-        .doOnComplete(splitTblSched::shutdown)
-        .doOnComplete(copyTblSched::shutdown);
+        .doOnComplete(avroSched::shutdown)
+        .doOnComplete(splitSched::shutdown);
   }
 
 }

@@ -63,10 +63,16 @@ public class Database {
 
           public String name;
           public int type;
+          public boolean pk;
+          public short ordinal;
 
           public Column(String name, int type) {
             this.name = name;
             this.type = type;
+          }
+
+          public short getOrdinal(){
+            return ordinal;
           }
 
         }
