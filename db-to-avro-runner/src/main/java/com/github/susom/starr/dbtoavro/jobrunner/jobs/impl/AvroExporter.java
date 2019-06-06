@@ -37,7 +37,7 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = (int) (cores * (.50));
+    int threads = (int) (cores * (.75));
 
     ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
