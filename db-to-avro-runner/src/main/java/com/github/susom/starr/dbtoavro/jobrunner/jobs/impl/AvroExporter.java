@@ -54,27 +54,28 @@ public class AvroExporter implements Exporter {
               .flatMap(catalog -> dbFns.getSchemas(catalog)
                   .filter(job.schemas::contains) // filter out unwanted schemas
                   .flatMap(schema -> dbFns.getTables(catalog, schema)
-                      .flatMap(t -> Observable.just(t)
-                          .flatMapSingle(dbFns::introspect)
-                          .subscribeOn(Schedulers.from(dbPoolSched))
-                      )
-                      .flatMap(table -> avroFns.getSplitterColumn(table, threshold)
-                          .flatMapObservable(d -> avroFns.getTableRanges(table, d,
-                              Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
-                              .subscribeOn(Schedulers.from(dbPoolSched))
+                      .filter(table -> !table.name.equals("skip me")) // filter unwanted tables (TBI)
+                      .toFlowable(BackpressureStrategy.BUFFER)
+                      .parallel()
+                      .runOn(Schedulers.from(dbPoolSched))
+                      .flatMap(table ->
+                          dbFns.introspect(table)
+                              .andThen(
+                                  avroFns.getSplitterColumn(table, threshold)
+                                      .flatMapObservable(d -> avroFns.getTableRanges(table, d,
+                                          Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+                                          .flatMapSingle(
+                                              range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                          )
+                                      )
+                                      .switchIfEmpty(
+                                          avroFns.saveAsAvro(table, job.destination + filePattern).toObservable()
+                                      )
+                              )
                               .toFlowable(BackpressureStrategy.BUFFER)
-                              .parallel()
-                              .runOn(Schedulers.from(dbPoolSched))
-                              .flatMap(
-                                  range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
-                                      .toFlowable())
-                              .sequential().toObservable()
-                          ).switchIfEmpty(
-                              avroFns.saveAsAvro(table, job.destination + filePattern)
-                                  .toObservable()
-                                  .subscribeOn(Schedulers.from(dbPoolSched))
-                          )
                       )
+                      .sequential()
+                      .toObservable()
                   )
               );
         })

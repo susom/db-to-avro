@@ -178,7 +178,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   }
 
   @Override
-  public Single<Table> introspect(final Table table) {
+  public Completable introspect(final Table table) {
     LOGGER.info("Introspecting {}", table.name);
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setCatalog(table.catalog);
@@ -205,8 +205,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           .argString(table.schema)
           .argString(table.name)
           .queryLongOrZero();
-      return table;
-    }).toSingle();
+    });
   }
 
   @Override
