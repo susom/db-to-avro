@@ -37,7 +37,7 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = (int) (cores * (.75));
+    int threads = (int) (cores * (.50));
 
     ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
@@ -58,26 +58,23 @@ public class AvroExporter implements Exporter {
                           .flatMapSingle(dbFns::introspect)
                           .subscribeOn(Schedulers.from(dbPoolSched))
                       )
-                      .flatMap(table -> {
-                        if (table.bytes > threshold) {
-                          return
-                              avroFns.getTableRanges(table,
-                                  Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+                      .flatMap(table -> avroFns.getSplitterColumn(table, threshold)
+                          .flatMapObservable(d -> avroFns.getTableRanges(table, d,
+                              Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
+                              .subscribeOn(Schedulers.from(dbPoolSched))
+                              .toFlowable(BackpressureStrategy.BUFFER)
+                              .parallel()
+                              .runOn(Schedulers.from(dbPoolSched))
+                              .flatMap(
+                                  range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                      .toFlowable())
+                              .sequential().toObservable()
+                          ).switchIfEmpty(
+                              avroFns.saveAsAvro(table, job.destination + filePattern)
+                                  .toObservable()
                                   .subscribeOn(Schedulers.from(dbPoolSched))
-                                  .toFlowable(BackpressureStrategy.BUFFER)
-                                  .parallel()
-                                  .runOn(Schedulers.from(dbPoolSched))
-                                  .flatMap(
-                                      range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
-                                          .toFlowable())
-                                  .sequential()
-                                  .toObservable();
-                        } else {
-                          return avroFns.saveAsAvro(table, job.destination + filePattern)
-                              .toObservable()
-                              .subscribeOn(Schedulers.from(dbPoolSched));
-                        }
-                      })
+                          )
+                      )
                   )
               );
         })

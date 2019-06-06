@@ -64,32 +64,117 @@ public class SqlServerDatabaseFns implements DatabaseFns {
     });
   }
 
+//  @Override
+//  public Observable<String> getCatalogs(Database database) {
+//    return Observable.create(emitter -> {
+//      dbb.withConnectionAccess().transact(db -> {
+//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+//        ResultSet catalogs = metadata.getCatalogs();
+//        while (catalogs.next()) {
+//          emitter.onNext(catalogs.getString(1));
+//        }
+//        emitter.onComplete();
+//      });
+//    });
+//  }
+
   @Override
   public Observable<String> getCatalogs(Database database) {
-    return Observable.create(emitter -> {
-      dbb.withConnectionAccess().transact(db -> {
+    return
+      dbb.withConnectionAccess().transactRx(db -> {
+        List<String> catalogsList = new ArrayList<>();
         DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
         ResultSet catalogs = metadata.getCatalogs();
         while (catalogs.next()) {
-          emitter.onNext(catalogs.getString(1));
+          catalogsList.add(catalogs.getString(1));
         }
-        emitter.onComplete();
-      });
-    });
+        return catalogsList;
+      }).toObservable().flatMapIterable(l -> l);
   }
+//
+//  @Override
+//  public Observable<String> getSchemas(String catalog) {
+//    return Observable.create(emitter -> {
+//      dbb.withConnectionAccess().transact(db -> {
+//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+//        ResultSet schemas = metadata.getSchemas(catalog, null);
+//        while (schemas.next()) {
+//          emitter.onNext(schemas.getString(1));
+//        }
+//        emitter.onComplete();
+//      });
+//    });
+//  }
 
   @Override
   public Observable<String> getSchemas(String catalog) {
-    return Observable.create(emitter -> {
-      dbb.withConnectionAccess().transact(db -> {
+    return dbb.withConnectionAccess().transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       ResultSet schemas = metadata.getSchemas(catalog, null);
+      List<String> schemasList = new ArrayList<>();
       while (schemas.next()) {
-        emitter.onNext(schemas.getString(1));
+        schemasList.add(schemas.getString(1));
       }
-        emitter.onComplete();
-      });
-    });
+      return schemasList;
+    }).toObservable().flatMapIterable(l -> l);
+  }
+
+
+//  @Override
+//  public Observable<Table> getTables(String catalog, String schema) {
+//    return Observable.create(emitter -> {
+//      dbb.withConnectionAccess().transact(db -> {
+//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+//        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
+//        while (tables.next()) {
+//          String name = tables.getString(3);
+//          List<Column> cols = new ArrayList<>();
+//          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
+//          while (columns.next()) {
+//            String colName = columns.getString(4);
+//            int type = columns.getInt(5);
+//            cols.add(new Column(colName, type));
+//          }
+//          // Get primary keys
+//          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
+//          while (pks.next()) {
+//            String colName = pks.getString(4);
+//            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> {
+//              c.isPrimaryKey = true;
+//            });
+//          }
+//          emitter.onNext(new Table(catalog, schema, name, cols));
+//        }
+//        emitter.onComplete();
+//      });
+//    });
+//  }
+
+  @Override
+  public Observable<Table> getTables(String catalog, String schema) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
+        List<Table> tablesList = new ArrayList<>();
+        while (tables.next()) {
+          String name = tables.getString(3);
+          List<Column> cols = new ArrayList<>();
+          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
+          while (columns.next()) {
+            String colName = columns.getString(4);
+            int type = columns.getInt(5);
+            cols.add(new Column(colName, type));
+          }
+          // Get primary keys
+          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
+          while (pks.next()) {
+            String colName = pks.getString(4);
+            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
+          }
+          tablesList.add(new Table(catalog, schema, name, cols));
+        }
+        return tablesList;
+    }).toObservable().flatMapIterable(l -> l);
   }
 
   @Override
@@ -122,36 +207,6 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           .queryLongOrZero();
       return table;
     }).toSingle();
-  }
-
-  @Override
-  public Observable<Table> getTables(String catalog, String schema) {
-    return Observable.create(emitter -> {
-      dbb.withConnectionAccess().transact(db -> {
-        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
-        while (tables.next()) {
-          String name = tables.getString(3);
-          List<Column> cols = new ArrayList<>();
-          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
-          while (columns.next()) {
-            String colName = columns.getString(4);
-            int type = columns.getInt(5);
-            cols.add(new Column(colName, type));
-          }
-          // Get primary keys
-          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
-          while (pks.next()) {
-            String colName = pks.getString(4);
-            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> {
-              c.isPrimaryKey = true;
-            });
-          }
-          emitter.onNext(new Table(catalog, schema, name, cols));
-        }
-        emitter.onComplete();
-      });
-    });
   }
 
   @Override

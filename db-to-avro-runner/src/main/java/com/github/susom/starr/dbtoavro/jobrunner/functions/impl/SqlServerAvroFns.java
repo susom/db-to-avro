@@ -10,6 +10,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Column;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
+import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.math.BigDecimal;
@@ -20,11 +21,8 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.stream.IntStream;
 import org.apache.avro.file.CodecFactory;
 import org.joda.time.DateTime;
@@ -34,7 +32,6 @@ import org.slf4j.LoggerFactory;
 @SuppressWarnings("Duplicates")
 public class SqlServerAvroFns implements AvroFns {
 
-  private static final String TEMP_SUFFIX = "_XSPLITX";
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
 
   private static int[] supported = {
@@ -65,37 +62,42 @@ public class SqlServerAvroFns implements AvroFns {
         .withSqlParameterLogging();
   }
 
-  /*
-   * Todo: Figure out how to do this async so we can use the shared thread pool..
-   */
-  private Optional<Column> getSplitterColumn(Table table) {
-    return table.columns.parallelStream()
-        .filter(c -> c.isPrimaryKey)
-        .parallel()
-        .peek(c -> dbb.withConnectionAccess().transact(db -> {
-          LOGGER.debug("Comparing distinct column count for {} {}", table.name, c.name);
-          db.get().underlyingConnection().setCatalog(table.catalog);
-          db.get().underlyingConnection().setSchema(table.schema);
-          Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", c.name, table.name));
-          c.distinct = db.get().toSelect(sql).queryLongOrZero();
-        })).max(Comparator.comparing(Column::getDistinct));
+//  private Optional<Column> getSplitterColumn(Table table) {
+//    return table.columns.parallelStream()
+//        .filter(c -> c.isPrimaryKey)
+//        .parallel()
+//        .peek(c -> dbb.withConnectionAccess().transact(db -> {
+//          LOGGER.debug("Comparing distinct column count for {} {}", table.name, c.name);
+//          db.get().underlyingConnection().setCatalog(table.catalog);
+//          db.get().underlyingConnection().setSchema(table.schema);
+//          Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", c.name, table.name));
+//          c.distinct = db.get().toSelect(sql).queryLongOrZero();
+//        })).max(Comparator.comparing(Column::getDistinct));
+//  }
+
+  public Maybe<Column> getSplitterColumn(Table table, long threshold) {
+    return Observable.fromIterable(table.columns)
+        .filter(check -> table.bytes > threshold)
+        .filter(column -> column.isPrimaryKey)
+        .map(column -> {
+              dbb.withConnectionAccess().transact(db -> {
+                LOGGER.debug("Comparing distinct column count for {} {}", table.name, column.name);
+                db.get().underlyingConnection().setCatalog(table.catalog);
+                db.get().underlyingConnection().setSchema(table.schema);
+                Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", column.name, table.name));
+                column.distinct = db.get().toSelect(sql).queryLongOrZero();
+              });
+              return column;
+            }
+        ).reduce((column, column2) -> column.distinct > column2.distinct ? column : column2);
   }
 
-  public Observable<BoundedRange> getTableRanges(Table table, long divisions) {
+  public Observable<BoundedRange> getTableRanges(Table table, Column column, long divisions) {
     LOGGER.debug("Splitting {} in to {} parts", table.name, divisions);
     return Observable.create(emitter -> {
       dbb.withConnectionAccess().transact(db -> {
         db.get().underlyingConnection().setCatalog(table.catalog);
         db.get().underlyingConnection().setSchema(table.schema);
-
-        Optional<Column> splitResult = getSplitterColumn(table);
-        if (!splitResult.isPresent()) {
-          LOGGER.warn("Could not find a column to split on for table {}", table.name);
-          emitter.onNext(new BoundedRange(null, null, 0));
-          emitter.onComplete();
-          return;
-        }
-        Column splitColumn = splitResult.get();
 
         Connection con = db.get().underlyingConnection();
         String sql = String.format(
@@ -108,7 +110,7 @@ public class SqlServerAvroFns implements AvroFns {
                 + "WHERE (SEGMENTS.ROWNUM %% %3$s = 0)\n"
                 + "   OR (SEGMENTS.ROWNUM = 1)\n"
                 + "   OR (SEGMENTS.ROWNUM = %4$s)",
-            splitColumn.name, table.name, (table.rows / divisions), table.rows);
+            column.name, table.name, (table.rows / divisions), table.rows);
 
         Statement stmt = con.createStatement();
         ResultSet rs = stmt.executeQuery(sql);
@@ -136,11 +138,6 @@ public class SqlServerAvroFns implements AvroFns {
 
   @Override
   public Single<AvroFile> saveAsAvro(Table table, BoundedRange bounds, String pathExpr) {
-    // Skip if no suitable splitter was found
-    // TODO: This is hackish. Find a better way.
-    if (bounds.upper == null || bounds.lower == null) {
-      return saveAsAvro(table, pathExpr);
-    }
     return dbb.withConnectionAccess().transactRx(db -> {
       AvroFile avroFile = new AvroFile(table);
       avroFile.startTime = DateTime.now().toString();
@@ -216,7 +213,7 @@ public class SqlServerAvroFns implements AvroFns {
       sql.append(")");
 
       Etl.saveQuery(db.get().toSelect(sql)).asAvro(path, schema, avroFile.table.name)
-//          .withCodec(CodecFactory.snappyCodec())
+          .withCodec(CodecFactory.snappyCodec())
           .fetchSize(5000)
           .start();
 
@@ -263,7 +260,7 @@ public class SqlServerAvroFns implements AvroFns {
               String.format(Locale.CANADA, "SELECT %s FROM %s.%s", String.join(", ", columns), schema,
                   table.name)))
           .asAvro(path, schema, table.name)
-//          .withCodec(CodecFactory.snappyCodec())
+          .withCodec(CodecFactory.snappyCodec())
           .fetchSize(5000).start();
 
       avroFile.endTime = DateTime.now().toString();
