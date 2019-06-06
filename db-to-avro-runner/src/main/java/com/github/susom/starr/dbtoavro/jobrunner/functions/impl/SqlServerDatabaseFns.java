@@ -93,11 +93,41 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   }
 
   @Override
+  public Single<Table> introspect(final Table table) {
+    LOGGER.info("Introspecting {}", table.name);
+    return dbb.withConnectionAccess().transactRx(db -> {
+      db.get().underlyingConnection().setCatalog(table.catalog);
+      db.get().underlyingConnection().setSchema(table.schema);
+      try (CallableStatement spaceUsed = db.get().underlyingConnection()
+          .prepareCall("{call sp_spaceused(?)}")) {
+        spaceUsed.setString(1, table.schema + "." + table.name);
+        if (spaceUsed.execute()) {
+          ResultSet rs = spaceUsed.getResultSet();
+          while (rs.next()) {
+            table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+          }
+        }
+      } catch (SQLException ignored) {
+      }
+      // Get rows
+      table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+          + "FROM sys.objects OBJECTS\n"
+          + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+          + "WHERE OBJECTS.type = 'U'\n"
+          + "  AND PARTITIONS.index_id < 2\n"
+          + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+          + "  AND OBJECTS.Name = ?")
+          .argString(table.schema)
+          .argString(table.name)
+          .queryLongOrZero();
+      return table;
+    }).toSingle();
+  }
+
+  @Override
   public Observable<Table> getTables(String catalog, String schema) {
     return Observable.create(emitter -> {
       dbb.withConnectionAccess().transact(db -> {
-        db.get().underlyingConnection().setCatalog(catalog);
-        db.get().underlyingConnection().setSchema(schema);
         DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
         ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
         while (tables.next()) {
@@ -113,36 +143,11 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
           while (pks.next()) {
             String colName = pks.getString(4);
-            short seq = pks.getShort(5);
             cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> {
               c.isPrimaryKey = true;
             });
           }
-          // Get bytes
-          long bytes = 0;
-          try (CallableStatement spaceUsed = db.get().underlyingConnection()
-              .prepareCall("{call sp_spaceused(?)}")) {
-            spaceUsed.setString(1, schema + "." + name);
-            if (spaceUsed.execute()) {
-              ResultSet rs = spaceUsed.getResultSet();
-              while (rs.next()) {
-                bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
-              }
-            }
-          } catch (SQLException ignored) {
-          }
-          // Get rows
-          long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-              + "FROM sys.objects OBJECTS\n"
-              + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-              + "WHERE OBJECTS.type = 'U'\n"
-              + "  AND PARTITIONS.index_id < 2\n"
-              + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-              + "  AND OBJECTS.Name = ?")
-              .argString(schema)
-              .argString(name)
-              .queryLongOrZero();
-          emitter.onNext(new Table(catalog, schema, name, bytes, rows, cols));
+          emitter.onNext(new Table(catalog, schema, name, cols));
         }
         emitter.onComplete();
       });
@@ -152,7 +157,6 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   @Override
   public Single<Database> getDatabase(String containerId) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      LOGGER.info("Introspecting database");
       Database database = new Database(containerId);
       database.flavor = db.get().flavor();
       return database;

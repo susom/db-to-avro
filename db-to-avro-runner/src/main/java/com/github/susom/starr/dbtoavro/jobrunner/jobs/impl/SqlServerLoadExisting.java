@@ -47,8 +47,7 @@ public class SqlServerLoadExisting implements Loader {
     return
         db.transact(job.postSql)
             .doOnComplete(() -> LOGGER.info("Database post-sql completed, introspecting database"))
-            .andThen(db.getDatabase(null))
-            .doFinally(() -> LOGGER.info("Database introspection complete"));
+            .andThen(db.getDatabase(null));
   }
 
 }

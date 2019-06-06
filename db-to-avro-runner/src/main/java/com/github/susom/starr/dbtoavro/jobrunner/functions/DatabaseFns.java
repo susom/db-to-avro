@@ -52,4 +52,6 @@ public interface DatabaseFns {
 
   Observable<Table> getTables(String catalog, String schema);
 
+  Single<Table> introspect(Table table);
+
   }

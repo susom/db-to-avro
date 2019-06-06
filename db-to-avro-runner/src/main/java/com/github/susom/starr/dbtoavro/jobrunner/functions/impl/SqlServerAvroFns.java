@@ -14,14 +14,17 @@ import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.stream.IntStream;
 import org.apache.avro.file.CodecFactory;
 import org.joda.time.DateTime;
@@ -62,7 +65,10 @@ public class SqlServerAvroFns implements AvroFns {
         .withSqlParameterLogging();
   }
 
-  private Column getSplitterColumn(Table table) {
+  /*
+   * Todo: Figure out how to do this async so we can use the shared thread pool..
+   */
+  private Optional<Column> getSplitterColumn(Table table) {
     return table.columns.parallelStream()
         .filter(c -> c.isPrimaryKey)
         .parallel()
@@ -72,8 +78,7 @@ public class SqlServerAvroFns implements AvroFns {
           db.get().underlyingConnection().setSchema(table.schema);
           Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", c.name, table.name));
           c.distinct = db.get().toSelect(sql).queryLongOrZero();
-        })).max(Comparator.comparing(Column::getDistinct))
-        .orElseThrow(NoSuchElementException::new);
+        })).max(Comparator.comparing(Column::getDistinct));
   }
 
   public Observable<BoundedRange> getTableRanges(Table table, long divisions) {
@@ -83,7 +88,14 @@ public class SqlServerAvroFns implements AvroFns {
         db.get().underlyingConnection().setCatalog(table.catalog);
         db.get().underlyingConnection().setSchema(table.schema);
 
-        Column splitColumn = getSplitterColumn(table);
+        Optional<Column> splitResult = getSplitterColumn(table);
+        if (!splitResult.isPresent()) {
+          LOGGER.warn("Could not find a column to split on for table {}", table.name);
+          emitter.onNext(new BoundedRange(null, null, 0));
+          emitter.onComplete();
+          return;
+        }
+        Column splitColumn = splitResult.get();
 
         Connection con = db.get().underlyingConnection();
         String sql = String.format(
@@ -124,6 +136,11 @@ public class SqlServerAvroFns implements AvroFns {
 
   @Override
   public Single<AvroFile> saveAsAvro(Table table, BoundedRange bounds, String pathExpr) {
+    // Skip if no suitable splitter was found
+    // TODO: This is hackish. Find a better way.
+    if (bounds.upper == null || bounds.lower == null) {
+      return saveAsAvro(table, pathExpr);
+    }
     return dbb.withConnectionAccess().transactRx(db -> {
       AvroFile avroFile = new AvroFile(table);
       avroFile.startTime = DateTime.now().toString();
@@ -168,6 +185,10 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argInteger(Integer.valueOf((Short) bounds.lower.getValue()));
       } else if (bounds.lower.getValue() instanceof java.math.BigDecimal) {
         sql.argBigDecimal((BigDecimal) bounds.lower.getValue());
+      } else if (bounds.lower.getValue() instanceof java.sql.Timestamp) {
+        sql.argDate((Timestamp) bounds.lower.getValue());
+      } else if (bounds.lower.getValue() instanceof java.sql.Date) {
+        sql.argDate((Date) bounds.lower.getValue());
       } else {
         LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.lower.getValue().getClass());
       }
@@ -185,13 +206,17 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argInteger(Integer.valueOf((Short) bounds.upper.getValue()));
       } else if (bounds.upper.getValue() instanceof java.math.BigDecimal) {
         sql.argBigDecimal((BigDecimal) bounds.upper.getValue());
+      } else if (bounds.lower.getValue() instanceof java.sql.Timestamp) {
+        sql.argDate((Timestamp) bounds.lower.getValue());
+      } else if (bounds.lower.getValue() instanceof java.sql.Date) {
+        sql.argDate((Date) bounds.lower.getValue());
       } else {
         LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.upper.getValue().getClass());
       }
       sql.append(")");
 
       Etl.saveQuery(db.get().toSelect(sql)).asAvro(path, schema, avroFile.table.name)
-          .withCodec(CodecFactory.snappyCodec())
+//          .withCodec(CodecFactory.snappyCodec())
           .fetchSize(5000)
           .start();
 
@@ -237,7 +262,9 @@ public class SqlServerAvroFns implements AvroFns {
           db.get().toSelect(
               String.format(Locale.CANADA, "SELECT %s FROM %s.%s", String.join(", ", columns), schema,
                   table.name)))
-          .asAvro(path, schema, table.name).withCodec(CodecFactory.snappyCodec()).fetchSize(5000).start();
+          .asAvro(path, schema, table.name)
+//          .withCodec(CodecFactory.snappyCodec())
+          .fetchSize(5000).start();
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;

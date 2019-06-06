@@ -37,10 +37,10 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    ExecutorService avroSched = Executors
-        .newFixedThreadPool((int) (cores * (.75)));
+    int threads = (int) (cores * (.75));
 
-    ExecutorService splitSched = Executors.newFixedThreadPool(cores > 4 ? (cores / 4) : 2);
+    ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
+    LOGGER.info("Starting export using {} threads", threads);
 
     return loader.run(job)
         .flatMapObservable(database -> {
@@ -54,15 +54,19 @@ public class AvroExporter implements Exporter {
               .flatMap(catalog -> dbFns.getSchemas(catalog)
                   .filter(job.schemas::contains) // filter out unwanted schemas
                   .flatMap(schema -> dbFns.getTables(catalog, schema)
+                      .flatMap(t -> Observable.just(t)
+                          .flatMapSingle(dbFns::introspect)
+                          .subscribeOn(Schedulers.from(dbPoolSched))
+                      )
                       .flatMap(table -> {
                         if (table.bytes > threshold) {
                           return
                               avroFns.getTableRanges(table,
                                   Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
-                                  .subscribeOn(Schedulers.from(splitSched))
+                                  .subscribeOn(Schedulers.from(dbPoolSched))
                                   .toFlowable(BackpressureStrategy.BUFFER)
                                   .parallel()
-                                  .runOn(Schedulers.from(avroSched))
+                                  .runOn(Schedulers.from(dbPoolSched))
                                   .flatMap(
                                       range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
                                           .toFlowable())
@@ -71,14 +75,13 @@ public class AvroExporter implements Exporter {
                         } else {
                           return avroFns.saveAsAvro(table, job.destination + filePattern)
                               .toObservable()
-                              .subscribeOn(Schedulers.from(avroSched));
+                              .subscribeOn(Schedulers.from(dbPoolSched));
                         }
                       })
                   )
               );
         })
-        .doOnComplete(avroSched::shutdown)
-        .doOnComplete(splitSched::shutdown);
+        .doOnComplete(dbPoolSched::shutdown);
   }
 
 }

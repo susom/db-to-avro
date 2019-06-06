@@ -11,13 +11,10 @@ public class Table {
   public long rows;
   public List<Column> columns;
 
-  public Table(String catalog, String schema, String name, long bytes, long rows,
-      List<Column> columns) {
+  public Table(String catalog, String schema, String name, List<Column> columns) {
     this.catalog = catalog;
     this.schema = schema;
     this.name = name;
-    this.bytes = bytes;
-    this.rows = rows;
     this.columns = columns;
   }
 
