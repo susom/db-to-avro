@@ -43,8 +43,6 @@ public class SqlServerDatabaseFns implements DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
-  private static final String TEMP_SUFFIX = "_XSPLITX";
-
   private DatabaseProviderRx.Builder dbb;
 
   public SqlServerDatabaseFns(Config config) {

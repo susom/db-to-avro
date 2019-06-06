@@ -34,6 +34,8 @@ public class SqlServerAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
 
+  private static final int FETCH_SIZE = 10000;
+
   private static int[] supported = {
       Types.BIGINT,
       Types.BINARY,
@@ -61,19 +63,6 @@ public class SqlServerAvroFns implements AvroFns {
         .withSqlInExceptionMessages()
         .withSqlParameterLogging();
   }
-
-//  private Optional<Column> getSplitterColumn(Table table) {
-//    return table.columns.parallelStream()
-//        .filter(c -> c.isPrimaryKey)
-//        .parallel()
-//        .peek(c -> dbb.withConnectionAccess().transact(db -> {
-//          LOGGER.debug("Comparing distinct column count for {} {}", table.name, c.name);
-//          db.get().underlyingConnection().setCatalog(table.catalog);
-//          db.get().underlyingConnection().setSchema(table.schema);
-//          Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", c.name, table.name));
-//          c.distinct = db.get().toSelect(sql).queryLongOrZero();
-//        })).max(Comparator.comparing(Column::getDistinct));
-//  }
 
   public Maybe<Column> getSplitterColumn(Table table, long threshold) {
     return Observable.fromIterable(table.columns)
@@ -214,7 +203,7 @@ public class SqlServerAvroFns implements AvroFns {
 
       Etl.saveQuery(db.get().toSelect(sql)).asAvro(path, schema, avroFile.table.name)
           .withCodec(CodecFactory.snappyCodec())
-          .fetchSize(5000)
+          .fetchSize(FETCH_SIZE)
           .start();
 
       avroFile.endTime = DateTime.now().toString();
@@ -261,7 +250,7 @@ public class SqlServerAvroFns implements AvroFns {
                   table.name)))
           .asAvro(path, schema, table.name)
           .withCodec(CodecFactory.snappyCodec())
-          .fetchSize(5000).start();
+          .fetchSize(FETCH_SIZE).start();
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;
