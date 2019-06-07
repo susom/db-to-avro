@@ -1,5 +1,6 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Table {
@@ -9,7 +10,13 @@ public class Table {
   public String name;
   public long bytes;
   public long rows;
-  public List<Column> columns;
+  public List<Column> columns = new ArrayList<>();
+
+  public Table(String catalog, String schema, String name) {
+    this.catalog = catalog;
+    this.schema = schema;
+    this.name = name;
+  }
 
   public Table(String catalog, String schema, String name, List<Column> columns) {
     this.catalog = catalog;

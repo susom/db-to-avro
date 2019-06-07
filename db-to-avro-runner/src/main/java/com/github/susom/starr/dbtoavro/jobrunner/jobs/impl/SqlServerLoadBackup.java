@@ -24,6 +24,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
 import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
@@ -45,9 +46,9 @@ public class SqlServerLoadBackup implements Loader {
   private SqlServerDatabaseFns db;
   private Config config;
 
-  public SqlServerLoadBackup(Config config) {
+  public SqlServerLoadBackup(Config config, DatabaseProviderRx.Builder dbb) {
     this.config = config;
-    this.db = new SqlServerDatabaseFns(config);
+    this.db = new SqlServerDatabaseFns(config, dbb);
   }
 
   @Override

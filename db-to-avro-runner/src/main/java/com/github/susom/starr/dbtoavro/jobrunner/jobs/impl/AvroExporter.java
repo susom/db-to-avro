@@ -8,6 +8,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Exporter;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
@@ -25,9 +26,11 @@ public class AvroExporter implements Exporter {
   private final long threshold;
   private final long bytes;
   private final int cores;
+  private DatabaseProviderRx.Builder dbb;
 
-  public AvroExporter(Config config) {
+  public AvroExporter(Config config, DatabaseProviderRx.Builder dbb) {
     this.config = config;
+    this.dbb = dbb;
     this.threshold = config.getLong("avro.split.threshold", 1000000000);
     this.bytes = config.getLong("avro.split.bytes", 250000000);
     this.filePattern = config.getString("avro.filename", "%{SCHEMA}.%{TABLE}-%{PART}.avro");
@@ -37,15 +40,15 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = (int) (cores * (.75));
+    int threads = (int) (cores * (.50));
 
     ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
 
     return loader.run(job)
         .flatMapObservable(database -> {
-          AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config);
-          DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config);
+          AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
+          DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
           if (avroFns == null || dbFns == null) {
             return Observable.error(new Exception("Unsupported database flavor!"));
           }
@@ -54,7 +57,7 @@ public class AvroExporter implements Exporter {
               .flatMap(catalog -> dbFns.getSchemas(catalog)
                   .filter(job.schemas::contains) // filter out unwanted schemas
                   .flatMap(schema -> dbFns.getTables(catalog, schema)
-                      .filter(table -> !table.name.equals("skip me")) // filter unwanted tables (TBI)
+//                      .filter(table -> table.name.contains("ZC_")) // testing
                       .toFlowable(BackpressureStrategy.BUFFER)
                       .parallel()
                       .runOn(Schedulers.from(dbPoolSched))
@@ -64,8 +67,11 @@ public class AvroExporter implements Exporter {
                                   avroFns.getSplitterColumn(table, threshold)
                                       .flatMapObservable(d -> avroFns.getTableRanges(table, d,
                                           Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
-                                          .flatMapSingle(
-                                              range -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                          .flatMap(range -> Observable.just(range)
+                                              .subscribeOn(Schedulers.from(dbPoolSched))
+                                              .flatMap(
+                                                  r -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
+                                                      .toObservable())
                                           )
                                       )
                                       .switchIfEmpty(

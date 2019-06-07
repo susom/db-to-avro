@@ -1,6 +1,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
+import com.github.susom.database.DatabaseProviderVertx;
 import com.github.susom.database.Sql;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
@@ -34,7 +35,7 @@ public class SqlServerAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
 
-  private static final int FETCH_SIZE = 10000;
+  private static final int FETCH_SIZE = 5000;
 
   private static int[] supported = {
       Types.BIGINT,
@@ -55,13 +56,12 @@ public class SqlServerAvroFns implements AvroFns {
       Types.VARCHAR
   };
 
-  private DatabaseProviderRx.Builder dbb;
+  private final DatabaseProviderRx.Builder dbb;
+  private final Config config;
 
-  public SqlServerAvroFns(Config config) {
-    dbb = DatabaseProviderRx
-        .pooledBuilder(config)
-        .withSqlInExceptionMessages()
-        .withSqlParameterLogging();
+  public SqlServerAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
+    this.config = config;
+    this.dbb = dbb;
   }
 
   public Maybe<Column> getSplitterColumn(Table table, long threshold) {
@@ -69,7 +69,7 @@ public class SqlServerAvroFns implements AvroFns {
         .filter(check -> table.bytes > threshold)
         .filter(column -> column.isPrimaryKey)
         .map(column -> {
-              dbb.withConnectionAccess().transact(db -> {
+              dbb.withConnectionAccess().transactRx(db -> {
                 LOGGER.debug("Comparing distinct column count for {} {}", table.name, column.name);
                 db.get().underlyingConnection().setCatalog(table.catalog);
                 db.get().underlyingConnection().setSchema(table.schema);
@@ -83,46 +83,46 @@ public class SqlServerAvroFns implements AvroFns {
 
   public Observable<BoundedRange> getTableRanges(Table table, Column column, long divisions) {
     LOGGER.debug("Splitting {} in to {} parts", table.name, divisions);
-    return Observable.create(emitter -> {
-      dbb.withConnectionAccess().transact(db -> {
-        db.get().underlyingConnection().setCatalog(table.catalog);
-        db.get().underlyingConnection().setSchema(table.schema);
+    return dbb.withConnectionAccess().transactRx(db -> {
+      db.get().underlyingConnection().setCatalog(table.catalog);
+      db.get().underlyingConnection().setSchema(table.schema);
 
-        Connection con = db.get().underlyingConnection();
-        String sql = String.format(
-            "SELECT %1$s\n"
-                + "FROM (\n"
-                + "         SELECT %1$s, ROW_NUMBER() OVER (ORDER BY %1$s) AS ROWNUM\n"
-                + "         FROM %2$s\n"
-                + "     )\n"
-                + "  AS SEGMENTS\n"
-                + "WHERE (SEGMENTS.ROWNUM %% %3$s = 0)\n"
-                + "   OR (SEGMENTS.ROWNUM = 1)\n"
-                + "   OR (SEGMENTS.ROWNUM = %4$s)",
-            column.name, table.name, (table.rows / divisions), table.rows);
+      List<BoundedRange> ranges = new ArrayList<>();
 
-        Statement stmt = con.createStatement();
-        ResultSet rs = stmt.executeQuery(sql);
+      Connection con = db.get().underlyingConnection();
+      String sql = String.format(
+          "SELECT %1$s\n"
+              + "FROM (\n"
+              + "         SELECT %1$s, ROW_NUMBER() OVER (ORDER BY %1$s) AS ROWNUM\n"
+              + "         FROM %2$s WITH (NOLOCK)\n"
+              + "     ) \n"
+              + "  AS SEGMENTS \n"
+              + "WHERE (SEGMENTS.ROWNUM %% %3$s = 0)\n"
+              + "   OR (SEGMENTS.ROWNUM = 1)\n"
+              + "   OR (SEGMENTS.ROWNUM = %4$s)",
+          column.name, table.name, (table.rows / divisions), table.rows);
 
-        SqlObject previous = null;
-        int row = 0;
-        while (rs.next()) {
-          SqlObject current;
-          current = new SqlObject(rs.getMetaData().getColumnName(1), rs.getObject(1));
-          if (previous != null) {
-            BoundedRange range = new BoundedRange(previous, current, row++);
-            if (range.index == divisions) {
-              range.terminal = true;
+      try (Statement stmt = con.createStatement()) {
+        try (ResultSet rs = stmt.executeQuery(sql)) {
+          SqlObject previous = null;
+          int row = 0;
+          while (rs.next()) {
+            SqlObject current;
+            current = new SqlObject(rs.getMetaData().getColumnName(1), rs.getObject(1));
+            if (previous != null) {
+              BoundedRange range = new BoundedRange(previous, current, row++);
+              if (range.index == divisions) {
+                range.terminal = true;
+              }
+              ranges.add(range);
             }
-            emitter.onNext(range);
+            previous = current;
           }
-          previous = current;
         }
+      }
 
-        emitter.onComplete();
-
-      });
-    });
+      return ranges;
+    }).toObservable().flatMapIterable(l -> l);
   }
 
   @Override
@@ -157,7 +157,8 @@ public class SqlServerAvroFns implements AvroFns {
 
       Sql sql = new Sql()
           .append(
-              String.format(Locale.CANADA, "SELECT %s FROM %s.%s \n", String.join(", ", columns), schema, tableName))
+              String.format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK) \n",
+                  String.join(", ", columns), schema, tableName))
           .append("WHERE (");
 
       sql.append(String.format("%s >= ?", bounds.lower.getName()));
@@ -246,11 +247,12 @@ public class SqlServerAvroFns implements AvroFns {
 
       Etl.saveQuery(
           db.get().toSelect(
-              String.format(Locale.CANADA, "SELECT %s FROM %s.%s", String.join(", ", columns), schema,
+              String.format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", columns), schema,
                   table.name)))
           .asAvro(path, schema, table.name)
           .withCodec(CodecFactory.snappyCodec())
-          .fetchSize(FETCH_SIZE).start();
+          .fetchSize(FETCH_SIZE)
+          .start();
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;

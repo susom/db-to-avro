@@ -9,10 +9,11 @@
   <logger name="com.github.susom.dbgoodies.etl" level="warn"/>
   <logger name="com.github.susom.database" level="warn" />
   <logger name="com.github.susom.starr.dbtoavro.jobrunner.util" level="info" />
+  <logger name="com.zaxxer.hikari" level="debug" />
 
   <logger name="com.github.susom.starr.dbtoavro" level="debug" />
 
-  <root level="warn">
+  <root level="info">
     <appender-ref ref="STDOUT"/>
   </root>
 

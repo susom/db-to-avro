@@ -23,6 +23,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExporter;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -39,12 +40,17 @@ public class JobRunner {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(JobRunner.class);
 
-  private Job job;
-  private Config config;
+  private final Job job;
+  private final Config config;
+  private final DatabaseProviderRx.Builder dbb;
 
   public JobRunner(Config config, Job job) {
     this.config = config;
     this.job = job;
+    this.dbb = DatabaseProviderRx
+        .pooledBuilder(config)
+        .withSqlInExceptionMessages()
+        .withSqlParameterLogging();
   }
 
   /**
@@ -60,9 +66,9 @@ public class JobRunner {
     switch (job.flavor) {
       case sqlserver:
         if (job.connection == null) {
-          loader = new SqlServerLoadBackup(config);
+          loader = new SqlServerLoadBackup(config, dbb);
         } else {
-          loader = new SqlServerLoadExisting(config);
+          loader = new SqlServerLoadExisting(config, dbb);
         }
         break;
       default:
@@ -71,7 +77,7 @@ public class JobRunner {
 
     if (job.destination != null) {
       Gson gson = new GsonBuilder().setPrettyPrinting().create();
-      return new AvroExporter(config).run(job, loader)
+      return new AvroExporter(config, dbb).run(job, loader)
           .toList()
           .doOnSuccess(avros -> {
             JsonObject json = new JsonObject();

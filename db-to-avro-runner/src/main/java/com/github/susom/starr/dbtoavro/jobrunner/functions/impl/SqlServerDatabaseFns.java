@@ -38,18 +38,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Sql-server specific SQL statements, for various database tasks
  */
-@SuppressWarnings("Duplicates")
 public class SqlServerDatabaseFns implements DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
-  private DatabaseProviderRx.Builder dbb;
+  private final Config config;
+  private final DatabaseProviderRx.Builder dbb;
 
-  public SqlServerDatabaseFns(Config config) {
-    dbb = DatabaseProviderRx
-        .pooledBuilder(config)
-        .withSqlInExceptionMessages()
-        .withSqlParameterLogging();
+  public SqlServerDatabaseFns(Config config, DatabaseProviderRx.Builder dbb) {
+    this.config = config;
+    this.dbb = dbb;
   }
 
   @Override
@@ -62,116 +60,49 @@ public class SqlServerDatabaseFns implements DatabaseFns {
     });
   }
 
-//  @Override
-//  public Observable<String> getCatalogs(Database database) {
-//    return Observable.create(emitter -> {
-//      dbb.withConnectionAccess().transact(db -> {
-//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-//        ResultSet catalogs = metadata.getCatalogs();
-//        while (catalogs.next()) {
-//          emitter.onNext(catalogs.getString(1));
-//        }
-//        emitter.onComplete();
-//      });
-//    });
-//  }
-
   @Override
   public Observable<String> getCatalogs(Database database) {
     return
-      dbb.withConnectionAccess().transactRx(db -> {
-        List<String> catalogsList = new ArrayList<>();
-        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-        ResultSet catalogs = metadata.getCatalogs();
-        while (catalogs.next()) {
-          catalogsList.add(catalogs.getString(1));
-        }
-        return catalogsList;
-      }).toObservable().flatMapIterable(l -> l);
+        dbb.withConnectionAccess().transactRx(db -> {
+          DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+          try (ResultSet catalogs = metadata.getCatalogs()) {
+            List<String> catalogsList = new ArrayList<>();
+            while (catalogs.next()) {
+              catalogsList.add(catalogs.getString(1));
+            }
+            return catalogsList;
+          }
+        }).toObservable().flatMapIterable(l -> l);
   }
-//
-//  @Override
-//  public Observable<String> getSchemas(String catalog) {
-//    return Observable.create(emitter -> {
-//      dbb.withConnectionAccess().transact(db -> {
-//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-//        ResultSet schemas = metadata.getSchemas(catalog, null);
-//        while (schemas.next()) {
-//          emitter.onNext(schemas.getString(1));
-//        }
-//        emitter.onComplete();
-//      });
-//    });
-//  }
 
   @Override
   public Observable<String> getSchemas(String catalog) {
     return dbb.withConnectionAccess().transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-      ResultSet schemas = metadata.getSchemas(catalog, null);
-      List<String> schemasList = new ArrayList<>();
-      while (schemas.next()) {
-        schemasList.add(schemas.getString(1));
+      try (ResultSet schemas = metadata.getSchemas(catalog, null)) {
+        List<String> schemasList = new ArrayList<>();
+        while (schemas.next()) {
+          schemasList.add(schemas.getString(1));
+        }
+        return schemasList;
       }
-      return schemasList;
     }).toObservable().flatMapIterable(l -> l);
   }
 
 
-//  @Override
-//  public Observable<Table> getTables(String catalog, String schema) {
-//    return Observable.create(emitter -> {
-//      dbb.withConnectionAccess().transact(db -> {
-//        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-//        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
-//        while (tables.next()) {
-//          String name = tables.getString(3);
-//          List<Column> cols = new ArrayList<>();
-//          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
-//          while (columns.next()) {
-//            String colName = columns.getString(4);
-//            int type = columns.getInt(5);
-//            cols.add(new Column(colName, type));
-//          }
-//          // Get primary keys
-//          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
-//          while (pks.next()) {
-//            String colName = pks.getString(4);
-//            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> {
-//              c.isPrimaryKey = true;
-//            });
-//          }
-//          emitter.onNext(new Table(catalog, schema, name, cols));
-//        }
-//        emitter.onComplete();
-//      });
-//    });
-//  }
 
   @Override
   public Observable<Table> getTables(String catalog, String schema) {
     return dbb.withConnectionAccess().transactRx(db -> {
-        DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-        ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"});
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+      try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
         List<Table> tablesList = new ArrayList<>();
         while (tables.next()) {
           String name = tables.getString(3);
-          List<Column> cols = new ArrayList<>();
-          ResultSet columns = metadata.getColumns(catalog, schema, name, "%");
-          while (columns.next()) {
-            String colName = columns.getString(4);
-            int type = columns.getInt(5);
-            cols.add(new Column(colName, type));
-          }
-          // Get primary keys
-          ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name);
-          while (pks.next()) {
-            String colName = pks.getString(4);
-            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
-          }
-          tablesList.add(new Table(catalog, schema, name, cols));
+          tablesList.add(new Table(catalog, schema, name));
         }
         return tablesList;
+      }
     }).toObservable().flatMapIterable(l -> l);
   }
 
@@ -181,18 +112,41 @@ public class SqlServerDatabaseFns implements DatabaseFns {
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setCatalog(table.catalog);
       db.get().underlyingConnection().setSchema(table.schema);
+
+      // Retrieve columns
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+      List<Column> cols = new ArrayList<>();
+      try (ResultSet columns = metadata.getColumns(table.catalog, table.schema, table.name, "%")) {
+        while (columns.next()) {
+          String colName = columns.getString(4);
+          int type = columns.getInt(5);
+          cols.add(new Column(colName, type));
+        }
+        // Get primary keys
+        try (ResultSet pks = metadata.getPrimaryKeys(table.catalog, table.schema, table.name)) {
+          while (pks.next()) {
+            String colName = pks.getString(4);
+            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
+          }
+        }
+      }
+      table.columns.addAll(cols);
+
+      // Size of table in bytes
       try (CallableStatement spaceUsed = db.get().underlyingConnection()
           .prepareCall("{call sp_spaceused(?)}")) {
         spaceUsed.setString(1, table.schema + "." + table.name);
         if (spaceUsed.execute()) {
-          ResultSet rs = spaceUsed.getResultSet();
-          while (rs.next()) {
-            table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+          try (ResultSet rs = spaceUsed.getResultSet()) {
+            while (rs.next()) {
+              table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+            }
           }
         }
       } catch (SQLException ignored) {
       }
-      // Get rows
+
+      // Number of rows
       table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
           + "FROM sys.objects OBJECTS\n"
           + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"

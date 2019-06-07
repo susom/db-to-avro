@@ -22,6 +22,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Single;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +37,9 @@ public class SqlServerLoadExisting implements Loader {
   private SqlServerDatabaseFns db;
   private Config config;
 
-  public SqlServerLoadExisting(Config config) {
+  public SqlServerLoadExisting(Config config, DatabaseProviderRx.Builder dbb) {
     this.config = config;
-    this.db = new SqlServerDatabaseFns(config);
+    this.db = new SqlServerDatabaseFns(config, dbb);
   }
 
   @Override
@@ -46,7 +47,7 @@ public class SqlServerLoadExisting implements Loader {
     LOGGER.info("Using existing sql server database");
     return
         db.transact(job.postSql)
-            .doOnComplete(() -> LOGGER.info("Database post-sql completed, introspecting database"))
+            .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
             .andThen(db.getDatabase(null));
   }
 

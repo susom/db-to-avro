@@ -5,22 +5,23 @@ import com.github.susom.database.Flavor;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 
 public class FnFactory {
 
-  public static AvroFns getAvroFns(Flavor flav, Config config)  {
+  public static AvroFns getAvroFns(Flavor flav, Config config, DatabaseProviderRx.Builder dbb)  {
     switch (flav) {
       case sqlserver:
-        return new SqlServerAvroFns(config);
+        return new SqlServerAvroFns(config, dbb);
       default:
         return null;
     }
   }
 
-  public static DatabaseFns getDatabaseFns(Flavor flav, Config config)  {
+  public static DatabaseFns getDatabaseFns(Flavor flav, Config config, DatabaseProviderRx.Builder dbb)  {
     switch (flav) {
       case sqlserver:
-        return new SqlServerDatabaseFns(config);
+        return new SqlServerDatabaseFns(config, dbb);
       default:
         return null;
     }
