@@ -31,6 +31,7 @@ public class Job {
   public final String backupDir;
   public final String catalog;
   public final List<String> schemas;
+  public final List<String> tables;
   public final String postSql;
   public final String preSql;
   public final Flavor flavor;
@@ -38,12 +39,13 @@ public class Job {
   public final String connection;
 
   private Job(long id, List<String> backupFiles, String backupDir, String catalog, List<String> schemas,
-      String postSql, String preSql, Flavor flavor, String destination, String connection) {
+      List<String> tables, String postSql, String preSql, Flavor flavor, String destination, String connection) {
     this.id = id;
     this.backupFiles = backupFiles;
     this.backupDir = backupDir;
     this.catalog = catalog;
     this.schemas = schemas;
+    this.tables = tables;
     this.postSql = postSql;
     this.preSql = preSql;
     this.flavor = flavor;
@@ -57,6 +59,7 @@ public class Job {
     this.backupDir = builder.backupDir;
     this.catalog = builder.catalog;
     this.schemas = builder.schemas;
+    this.tables = builder.tables;
     this.postSql = builder.postSql;
     this.preSql = builder.preSql;
     this.flavor = builder.flavor;
@@ -71,6 +74,7 @@ public class Job {
     private String backupDir;
     private String catalog;
     private List<String> schemas;
+    private List<String> tables;
     private String postSql;
     private String preSql;
     private Flavor flavor;
@@ -106,6 +110,11 @@ public class Job {
 
     public Builder schemas(List<String> schemas) {
       this.schemas = schemas;
+      return this;
+    }
+
+    public Builder tables(List<String> tables) {
+      this.tables = tables;
       return this;
     }
 

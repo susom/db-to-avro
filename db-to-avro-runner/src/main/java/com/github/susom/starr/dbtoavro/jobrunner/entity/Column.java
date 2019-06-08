@@ -12,7 +12,4 @@ public class Column {
     this.type = type;
   }
 
-  public long getDistinct() {
-    return distinct;
-  }
 }

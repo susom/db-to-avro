@@ -1,13 +1,13 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.database.DatabaseProviderVertx;
 import com.github.susom.database.Sql;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.BoundedRange;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.BoundedRange.SqlObject;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Column;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Partition;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
@@ -29,8 +29,8 @@ import org.apache.avro.file.CodecFactory;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-@SuppressWarnings("Duplicates")
 public class SqlServerAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
@@ -82,7 +82,10 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   public Observable<BoundedRange> getTableRanges(Table table, Column column, long divisions) {
-    LOGGER.debug("Splitting {} in to {} parts", table.name, divisions);
+    LOGGER.debug("{} divisions for {}", divisions, table.name);
+    if (divisions > 256) {
+      LOGGER.warn("  That is a lot of divisions!");
+    }
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setCatalog(table.catalog);
       db.get().underlyingConnection().setSchema(table.schema);
@@ -125,7 +128,6 @@ public class SqlServerAvroFns implements AvroFns {
     }).toObservable().flatMapIterable(l -> l);
   }
 
-  @Override
   public Single<AvroFile> saveAsAvro(Table table, BoundedRange bounds, String pathExpr) {
     return dbb.withConnectionAccess().transactRx(db -> {
       AvroFile avroFile = new AvroFile(table);
@@ -151,9 +153,7 @@ public class SqlServerAvroFns implements AvroFns {
       String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
           .replace("%{SCHEMA}", schema)
           .replace("%{CATALOG}", catalog)
-          .replace("%{PART}", String.format("%03d", bounds.index));
-
-      LOGGER.info("Writing {}", path);
+          .replace("%{PART}", String.format("%05d", bounds.index));
 
       Sql sql = new Sql()
           .append(
@@ -168,6 +168,8 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argLong((Long) bounds.lower.getValue());
       } else if (bounds.lower.getValue() instanceof java.lang.Integer) {
         sql.argInteger((Integer) bounds.lower.getValue());
+      } else if (bounds.lower.getValue() instanceof java.lang.Double) {
+        sql.argDouble((Double) bounds.lower.getValue());
       } else if (bounds.lower.getValue() instanceof java.lang.Short) {
         sql.argInteger(Integer.valueOf((Short) bounds.lower.getValue()));
       } else if (bounds.lower.getValue() instanceof java.math.BigDecimal) {
@@ -177,7 +179,8 @@ public class SqlServerAvroFns implements AvroFns {
       } else if (bounds.lower.getValue() instanceof java.sql.Date) {
         sql.argDate((Date) bounds.lower.getValue());
       } else {
-        LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.lower.getValue().getClass());
+        throw new IndexOutOfBoundsException(String
+            .format("Didn't know how to cast class of type %s in lower bounds", bounds.lower.getValue().getClass()));
       }
       sql.append(") AND (");
 
@@ -189,6 +192,8 @@ public class SqlServerAvroFns implements AvroFns {
         sql.argLong((Long) bounds.upper.getValue());
       } else if (bounds.upper.getValue() instanceof java.lang.Integer) {
         sql.argInteger((Integer) bounds.upper.getValue());
+      } else if (bounds.lower.getValue() instanceof java.lang.Double) {
+        sql.argDouble((Double) bounds.lower.getValue());
       } else if (bounds.upper.getValue() instanceof java.lang.Short) {
         sql.argInteger(Integer.valueOf((Short) bounds.upper.getValue()));
       } else if (bounds.upper.getValue() instanceof java.math.BigDecimal) {
@@ -198,7 +203,8 @@ public class SqlServerAvroFns implements AvroFns {
       } else if (bounds.lower.getValue() instanceof java.sql.Date) {
         sql.argDate((Date) bounds.lower.getValue());
       } else {
-        LOGGER.error("Didn't know how to cast class of type {} in lower bounds", bounds.upper.getValue().getClass());
+        throw new IndexOutOfBoundsException(String
+            .format("Didn't know how to cast class of type %s in upper bounds", bounds.upper.getValue().getClass()));
       }
       sql.append(")");
 
@@ -214,7 +220,7 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   @Override
-  public Single<AvroFile> saveAsAvro(Table table, String pathExpr) {
+  public Observable<AvroFile> saveTableAsAvro(Table table, String pathExpr, long targetSize) {
     return dbb.withConnectionAccess().transactRx(db -> {
       AvroFile avroFile = new AvroFile(table);
       String catalog = table.catalog;
@@ -237,27 +243,52 @@ public class SqlServerAvroFns implements AvroFns {
 
       String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
           .replace("%{SCHEMA}", schema)
-          .replace("%{CATALOG}", catalog)
-          .replace("-%{PART}", "")
-          .replace("%{PART}-", "")
-          .replace("%{START}", "0")
-          .replace("%{END}", String.valueOf(table.rows));
+          .replace("%{CATALOG}", catalog);
 
       LOGGER.info("Writing {}", path);
 
-      Etl.saveQuery(
-          db.get().toSelect(
-              String.format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", columns), schema,
-                  table.name)))
-          .asAvro(path, schema, table.name)
-          .withCodec(CodecFactory.snappyCodec())
-          .fetchSize(FETCH_SIZE)
-          .start();
+      String sql = String
+          .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", columns), schema,
+              table.name);
+
+      if (targetSize == 0 || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize) {
+        Etl.saveQuery(
+            db.get().toSelect(sql))
+            .asAvro(path, schema, table.name)
+            .withCodec(CodecFactory.snappyCodec())
+            .fetchSize(FETCH_SIZE)
+            .start();
+      } else {
+        long rowsPerFile = targetSize / (table.bytes / table.rows);
+        // Todo -- how do we get back the files written by Etl.saveQuery()??
+        Etl.saveQuery(
+            db.get().toSelect(sql))
+            .asAvro(path, schema, table.name)
+            .withCodec(CodecFactory.snappyCodec())
+            .fetchSize(FETCH_SIZE)
+            .rowsPerFile(rowsPerFile)
+            .start();
+      }
 
       avroFile.endTime = DateTime.now().toString();
       avroFile.path = path;
+
       return avroFile;
-    }).toSingle();
+    }).toObservable();
+  }
+
+  @Override
+  public Observable<AvroFile> savePartitionAsAvro(Partition partition) {
+    throw new NotImplementedException();
+  }
+
+  /**
+   * {@inheritDoc}
+   * <p>SQL Server does not support row-level partitioning</p>
+   */
+  @Override
+  public Observable<Partition> getPartitions(Table table, long targetSize) {
+    return Observable.empty();
   }
 
   private boolean isSupportedType(int type) {

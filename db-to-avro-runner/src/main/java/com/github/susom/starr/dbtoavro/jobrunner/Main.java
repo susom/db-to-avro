@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import joptsimple.OptionException;
@@ -73,6 +74,10 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
+    OptionSpec<String> tables = parser.accepts("tables", "tables to export")
+        .withRequiredArg()
+        .ofType(String.class)
+        .withValuesSeparatedBy(',');
     OptionSpec<String> connection = parser.accepts("connect", "jdbc connection string for existing database")
         .withRequiredArg();
     OptionSpec<String> user = parser.accepts("user", "database user")
@@ -102,6 +107,7 @@ public class Main {
     //  switches for listing catalogs, schemas, and tables
     //  switch for testing connection to db
     //  switch for setting file name pattern
+    //  switch for filtering table names
 
     try {
 
@@ -117,6 +123,7 @@ public class Main {
           .flavor(optionSet.valueOf(flavor))
           .catalog(optionSet.valueOf(catalog))
           .schemas(optionSet.valuesOf(schemas))
+          .tables(optionSet.valuesOf(tables))
           .backupDir(optionSet.valueOf(backupDir))
           .backupFiles(optionSet.has(backupFiles)
               ? optionSet.valuesOf(backupFiles)
@@ -146,6 +153,11 @@ public class Main {
       }
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
+
+      // -Duser.timezone=
+      String tz = System.getProperty("user.timezone");
+      LOGGER.info("System time zone is {}, which will be used for dates with no timezone information.", tz);
+      LOGGER.info("Set the -Duser.timezone= property if the source database is not {}.", tz);
 
       long start;
       start = System.nanoTime();

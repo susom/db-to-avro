@@ -89,8 +89,6 @@ public class SqlServerDatabaseFns implements DatabaseFns {
     }).toObservable().flatMapIterable(l -> l);
   }
 
-
-
   @Override
   public Observable<Table> getTables(String catalog, String schema) {
     return dbb.withConnectionAccess().transactRx(db -> {
@@ -157,6 +155,7 @@ public class SqlServerDatabaseFns implements DatabaseFns {
           .argString(table.schema)
           .argString(table.name)
           .queryLongOrZero();
+
     });
   }
 

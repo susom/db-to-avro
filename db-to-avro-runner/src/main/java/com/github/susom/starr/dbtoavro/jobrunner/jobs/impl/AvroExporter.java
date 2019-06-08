@@ -40,9 +40,12 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = (int) (cores * (.50));
+    long targetSize = config.getLong("avro.targetsize", 0);
+    int threads = (int) (cores * (config.getDouble("avro.core.multiplier", 0.5)));
+    String path = job.destination + filePattern;
 
     ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
+
     LOGGER.info("Starting export using {} threads", threads);
 
     return loader.run(job)
@@ -52,37 +55,36 @@ public class AvroExporter implements Exporter {
           if (avroFns == null || dbFns == null) {
             return Observable.error(new Exception("Unsupported database flavor!"));
           }
+
           return dbFns.getCatalogs(database)
               .filter(job.catalog::equals) // filter out unwanted databases
-              .flatMap(catalog -> dbFns.getSchemas(catalog)
-                  .filter(job.schemas::contains) // filter out unwanted schemas
-                  .flatMap(schema -> dbFns.getTables(catalog, schema)
-//                      .filter(table -> table.name.contains("ZC_")) // testing
-                      .toFlowable(BackpressureStrategy.BUFFER)
-                      .parallel()
-                      .runOn(Schedulers.from(dbPoolSched))
-                      .flatMap(table ->
-                          dbFns.introspect(table)
-                              .andThen(
-                                  avroFns.getSplitterColumn(table, threshold)
-                                      .flatMapObservable(d -> avroFns.getTableRanges(table, d,
-                                          Math.floorDiv(table.bytes, bytes) > 1 ? Math.floorDiv(table.bytes, bytes) : 2)
-                                          .flatMap(range -> Observable.just(range)
-                                              .subscribeOn(Schedulers.from(dbPoolSched))
-                                              .flatMap(
-                                                  r -> avroFns.saveAsAvro(table, range, job.destination + filePattern)
-                                                      .toObservable())
-                                          )
-                                      )
-                                      .switchIfEmpty(
-                                          avroFns.saveAsAvro(table, job.destination + filePattern).toObservable()
-                                      )
-                              )
+              .flatMap(catalog ->
+
+                  dbFns.getSchemas(catalog)
+                      .filter(job.schemas::contains) // filter out unwanted schemas
+                      .flatMap(schema ->
+
+                          dbFns.getTables(catalog, schema)
+                              .filter(t -> job.tables.isEmpty() || job.tables.contains(t.name))
                               .toFlowable(BackpressureStrategy.BUFFER)
+                              .parallel()
+                              .runOn(Schedulers.from(dbPoolSched))
+                              .flatMap(table ->
+
+                                  dbFns.introspect(table)
+                                      .andThen(avroFns.getPartitions(table, targetSize)
+                                          .flatMap(avroFns::savePartitionAsAvro)
+                                          .switchIfEmpty(
+                                              avroFns.saveTableAsAvro(table, path, targetSize)
+                                          )
+                                      ).toFlowable(BackpressureStrategy.BUFFER)
+
+                              )
+                              .sequential()
+                              .toObservable()
+
                       )
-                      .sequential()
-                      .toObservable()
-                  )
+
               );
         })
         .doOnComplete(dbPoolSched::shutdown);
