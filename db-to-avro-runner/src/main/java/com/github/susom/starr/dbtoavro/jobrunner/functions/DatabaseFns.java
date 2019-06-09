@@ -22,6 +22,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
+import java.util.List;
 
 public interface DatabaseFns {
 
@@ -50,8 +51,6 @@ public interface DatabaseFns {
 
   Observable<String> getSchemas(String catalog);
 
-  Observable<Table> getTables(String catalog, String schema);
-
-  Completable introspect(Table table);
+  Observable<Table> getTables(String catalog, String schema, List<String> filter);
 
   }

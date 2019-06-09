@@ -1,37 +1,28 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Partition;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Observable;
 
 public interface AvroFns {
 
   /**
-   * Save an entire table without row-level splitting. May emit multiple avro files.
+   * Save an avrofile object to disk
    *
-   * @param table to export
-   * @param path expression for target file
-   * @param targetSize target for number of table-bytes to store in each Avro file
-   * @return AvroFile instance(s)
+   * @param avroFile avro file to save
+   * @return saved AvroFile instance
    */
-  Observable<AvroFile> saveTableAsAvro(Table table, String path, long targetSize);
+  Observable<AvroFile> saveAvroFile(AvroFile avroFile);
 
   /**
-   * Save a subset of a table as an Avro file. May emit multiple avro files.
-   *
-   * @param partition to save
-   * @return AvroFile instance
-   */
-  Observable<AvroFile> savePartitionAsAvro(Partition partition);
-
-  /**
-   * Emits partition instances representing subsets of a single table, or nothing if the table can't be split.
+   * Emits partitions representing subsets of a single table, or nothing if the table can't be partitioned.
    *
    * @param table table to split
-   * @param targetSize target size of avro file
+   * @param path expression for partitioned file
+   * @param size target size of the partition, in (table) bytes. Compression may reduce this size considerably. Specify
+   * 0 for no partitioning.
    * @return table segment
    */
-  Observable<Partition> getPartitions(Table table, long targetSize);
+  Observable<AvroFile> getPartitions(Table table, String path, long size);
 
 }

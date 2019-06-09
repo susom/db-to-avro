@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Simple pojo representing an completed Avro export (full or partial table)
+ * Simple pojo representing an Avro export from an SQL query
  */
 public class AvroFile {
 
@@ -12,12 +12,18 @@ public class AvroFile {
   public String path;
   public String startTime;
   public String endTime;
+  public String sql;
+  public long bytes;
 
-  public List<String> includedRows = new ArrayList<>();
-  public List<String> omittedRows = new ArrayList<>();
+  public List<String> includedColumns;
+  public List<String> excludedColumns;
 
-  public AvroFile(Table table) {
+  public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns) {
     this.table = table;
+    this.sql = sql;
+    this.path = path;
+    this.includedColumns = includedColumns;
+    this.excludedColumns = excludedColumns;
   }
 
 }

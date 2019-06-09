@@ -1,41 +1,28 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
-import com.github.susom.database.Sql;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.BoundedRange;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.BoundedRange.SqlObject;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Column;
-import com.github.susom.starr.dbtoavro.jobrunner.entity.Partition;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
-import io.reactivex.Maybe;
 import io.reactivex.Observable;
-import io.reactivex.Single;
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.ResultSet;
-import java.sql.Statement;
-import java.sql.Timestamp;
+import java.io.File;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.avro.file.CodecFactory;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class SqlServerAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
-
-  private static final int FETCH_SIZE = 5000;
 
   private static int[] supported = {
       Types.BIGINT,
@@ -51,244 +38,116 @@ public class SqlServerAvroFns implements AvroFns {
       Types.NVARCHAR,
       Types.REAL,
       Types.SMALLINT,
+      Types.TINYINT,
       Types.TIMESTAMP,
 //      Types.VARBINARY, // This is SpatialLocation in MSSQL
       Types.VARCHAR
   };
 
   private final DatabaseProviderRx.Builder dbb;
-  private final Config config;
+  private final int fetchSize;
+  private CodecFactory codec;
 
   public SqlServerAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
-    this.config = config;
     this.dbb = dbb;
-  }
-
-  public Maybe<Column> getSplitterColumn(Table table, long threshold) {
-    return Observable.fromIterable(table.columns)
-        .filter(check -> table.bytes > threshold)
-        .filter(column -> column.isPrimaryKey)
-        .map(column -> {
-              dbb.withConnectionAccess().transactRx(db -> {
-                LOGGER.debug("Comparing distinct column count for {} {}", table.name, column.name);
-                db.get().underlyingConnection().setCatalog(table.catalog);
-                db.get().underlyingConnection().setSchema(table.schema);
-                Sql sql = new Sql(String.format("SELECT COUNT(DISTINCT %s) FROM %s", column.name, table.name));
-                column.distinct = db.get().toSelect(sql).queryLongOrZero();
-              });
-              return column;
-            }
-        ).reduce((column, column2) -> column.distinct > column2.distinct ? column : column2);
-  }
-
-  public Observable<BoundedRange> getTableRanges(Table table, Column column, long divisions) {
-    LOGGER.debug("{} divisions for {}", divisions, table.name);
-    if (divisions > 256) {
-      LOGGER.warn("  That is a lot of divisions!");
-    }
-    return dbb.withConnectionAccess().transactRx(db -> {
-      db.get().underlyingConnection().setCatalog(table.catalog);
-      db.get().underlyingConnection().setSchema(table.schema);
-
-      List<BoundedRange> ranges = new ArrayList<>();
-
-      Connection con = db.get().underlyingConnection();
-      String sql = String.format(
-          "SELECT %1$s\n"
-              + "FROM (\n"
-              + "         SELECT %1$s, ROW_NUMBER() OVER (ORDER BY %1$s) AS ROWNUM\n"
-              + "         FROM %2$s WITH (NOLOCK)\n"
-              + "     ) \n"
-              + "  AS SEGMENTS \n"
-              + "WHERE (SEGMENTS.ROWNUM %% %3$s = 0)\n"
-              + "   OR (SEGMENTS.ROWNUM = 1)\n"
-              + "   OR (SEGMENTS.ROWNUM = %4$s)",
-          column.name, table.name, (table.rows / divisions), table.rows);
-
-      try (Statement stmt = con.createStatement()) {
-        try (ResultSet rs = stmt.executeQuery(sql)) {
-          SqlObject previous = null;
-          int row = 0;
-          while (rs.next()) {
-            SqlObject current;
-            current = new SqlObject(rs.getMetaData().getColumnName(1), rs.getObject(1));
-            if (previous != null) {
-              BoundedRange range = new BoundedRange(previous, current, row++);
-              if (range.index == divisions) {
-                range.terminal = true;
-              }
-              ranges.add(range);
-            }
-            previous = current;
-          }
-        }
-      }
-
-      return ranges;
-    }).toObservable().flatMapIterable(l -> l);
-  }
-
-  public Single<AvroFile> saveAsAvro(Table table, BoundedRange bounds, String pathExpr) {
-    return dbb.withConnectionAccess().transactRx(db -> {
-      AvroFile avroFile = new AvroFile(table);
-      avroFile.startTime = DateTime.now().toString();
-
-      String catalog = table.catalog;
-      String schema = table.schema;
-      String tableName = table.name;
-
-      db.get().underlyingConnection().setCatalog(catalog);
-
-      // Only dump the supported column types
-      List<String> columns = new ArrayList<>();
-      for (Column column : avroFile.table.columns) {
-        if (isSupportedType(column.type)) {
-          columns.add(column.name);
-          avroFile.includedRows.add(column.name);
-        } else {
-          avroFile.omittedRows.add(column.name);
-        }
-      }
-
-      String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
-          .replace("%{SCHEMA}", schema)
-          .replace("%{CATALOG}", catalog)
-          .replace("%{PART}", String.format("%05d", bounds.index));
-
-      Sql sql = new Sql()
-          .append(
-              String.format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK) \n",
-                  String.join(", ", columns), schema, tableName))
-          .append("WHERE (");
-
-      sql.append(String.format("%s >= ?", bounds.lower.getName()));
-      if (bounds.lower.getValue() instanceof java.lang.String) {
-        sql.argString((String) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.lang.Long) {
-        sql.argLong((Long) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.lang.Integer) {
-        sql.argInteger((Integer) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.lang.Double) {
-        sql.argDouble((Double) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.lang.Short) {
-        sql.argInteger(Integer.valueOf((Short) bounds.lower.getValue()));
-      } else if (bounds.lower.getValue() instanceof java.math.BigDecimal) {
-        sql.argBigDecimal((BigDecimal) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.sql.Timestamp) {
-        sql.argDate((Timestamp) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.sql.Date) {
-        sql.argDate((Date) bounds.lower.getValue());
-      } else {
-        throw new IndexOutOfBoundsException(String
-            .format("Didn't know how to cast class of type %s in lower bounds", bounds.lower.getValue().getClass()));
-      }
-      sql.append(") AND (");
-
-      // Upper bounds
-      sql.append(String.format("%s %s ?", bounds.upper.getName(), (bounds.terminal) ? "<=" : "<"));
-      if (bounds.upper.getValue() instanceof java.lang.String) {
-        sql.argString((String) bounds.upper.getValue());
-      } else if (bounds.upper.getValue() instanceof java.lang.Long) {
-        sql.argLong((Long) bounds.upper.getValue());
-      } else if (bounds.upper.getValue() instanceof java.lang.Integer) {
-        sql.argInteger((Integer) bounds.upper.getValue());
-      } else if (bounds.lower.getValue() instanceof java.lang.Double) {
-        sql.argDouble((Double) bounds.lower.getValue());
-      } else if (bounds.upper.getValue() instanceof java.lang.Short) {
-        sql.argInteger(Integer.valueOf((Short) bounds.upper.getValue()));
-      } else if (bounds.upper.getValue() instanceof java.math.BigDecimal) {
-        sql.argBigDecimal((BigDecimal) bounds.upper.getValue());
-      } else if (bounds.lower.getValue() instanceof java.sql.Timestamp) {
-        sql.argDate((Timestamp) bounds.lower.getValue());
-      } else if (bounds.lower.getValue() instanceof java.sql.Date) {
-        sql.argDate((Date) bounds.lower.getValue());
-      } else {
-        throw new IndexOutOfBoundsException(String
-            .format("Didn't know how to cast class of type %s in upper bounds", bounds.upper.getValue().getClass()));
-      }
-      sql.append(")");
-
-      Etl.saveQuery(db.get().toSelect(sql)).asAvro(path, schema, avroFile.table.name)
-          .withCodec(CodecFactory.snappyCodec())
-          .fetchSize(FETCH_SIZE)
-          .start();
-
-      avroFile.endTime = DateTime.now().toString();
-      avroFile.path = path;
-      return avroFile;
-    }).toSingle();
+    this.fetchSize = config.getInteger("avro.fetchsize", 10000);
+    this.codec = CodecFactory.fromString(config.getString("avro.codec", "snappy"));
   }
 
   @Override
-  public Observable<AvroFile> saveTableAsAvro(Table table, String pathExpr, long targetSize) {
+  public Observable<AvroFile> saveAvroFile(final AvroFile avroFile) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      AvroFile avroFile = new AvroFile(table);
-      String catalog = table.catalog;
-      String schema = table.schema;
+      Table table = avroFile.table;
+      LOGGER.info("Writing {}", avroFile.path);
 
       avroFile.startTime = DateTime.now().toString();
-
-      db.get().underlyingConnection().setCatalog(catalog);
-
-      // Only dump the supported column types
-      List<String> columns = new ArrayList<>();
-      for (Column column : table.columns) {
-        if (isSupportedType(column.type)) {
-          columns.add("[" + column.name + "]");
-          avroFile.includedRows.add(column.name);
-        } else {
-          avroFile.omittedRows.add(column.name);
-        }
-      }
-
-      String path = pathExpr.replace("%{TABLE}", avroFile.table.name)
-          .replace("%{SCHEMA}", schema)
-          .replace("%{CATALOG}", catalog);
-
-      LOGGER.info("Writing {}", path);
-
-      String sql = String
-          .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", columns), schema,
-              table.name);
-
-      if (targetSize == 0 || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize) {
-        Etl.saveQuery(
-            db.get().toSelect(sql))
-            .asAvro(path, schema, table.name)
-            .withCodec(CodecFactory.snappyCodec())
-            .fetchSize(FETCH_SIZE)
-            .start();
-      } else {
-        long rowsPerFile = targetSize / (table.bytes / table.rows);
-        // Todo -- how do we get back the files written by Etl.saveQuery()??
-        Etl.saveQuery(
-            db.get().toSelect(sql))
-            .asAvro(path, schema, table.name)
-            .withCodec(CodecFactory.snappyCodec())
-            .fetchSize(FETCH_SIZE)
-            .rowsPerFile(rowsPerFile)
-            .start();
-      }
-
+      db.get().underlyingConnection().setCatalog(table.catalog);
+      Etl.saveQuery(
+          db.get().toSelect(avroFile.sql))
+          .asAvro(avroFile.path, table.schema, table.name)
+          .withCodec(CodecFactory.snappyCodec())
+          .withCodec(codec)
+          .fetchSize(fetchSize)
+          .start();
       avroFile.endTime = DateTime.now().toString();
-      avroFile.path = path;
+      avroFile.bytes = new File(avroFile.path).length();
 
       return avroFile;
     }).toObservable();
   }
 
-  @Override
-  public Observable<AvroFile> savePartitionAsAvro(Partition partition) {
-    throw new NotImplementedException();
-  }
-
   /**
    * {@inheritDoc}
-   * <p>SQL Server does not support row-level partitioning</p>
+   * <p>Attempts to split table into partitions using the primary key(s).</p>
+   * <p>This works best if the table primary keys are a clustered index.</p>
+   * <p>If the table cannot be split, a single partition is emitted.</p>
    */
   @Override
-  public Observable<Partition> getPartitions(Table table, long targetSize) {
-    return Observable.empty();
+  public Observable<AvroFile> getPartitions(Table table, String path, long size) {
+
+    // Only dump the supported column types
+    List<String> includedColumns = new ArrayList<>();
+    List<String> excludedColumns = new ArrayList<>();
+    for (Column column : table.columns) {
+      if (isSupportedType(column.type)) {
+        includedColumns.add("[" + column.name + "]");
+      } else {
+        excludedColumns.add(column.name);
+      }
+    }
+
+    String finalPath = path.replace("%{TABLE}", table.name)
+        .replace("%{SCHEMA}", table.schema)
+        .replace("%{CATALOG}", table.catalog);
+
+    // Check if table doesn't meet partitioning criteria
+    if (table.bytes == 0 || table.rows == 0 || table.bytes < size || size == 0 ||
+        table.columns.stream().noneMatch(c -> c.isPrimaryKey)) {
+      String sql = String
+          .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", includedColumns), table.schema,
+              table.name);
+      return Observable
+          .just(new AvroFile(table, sql, finalPath.replace("-%{PART}", ""), includedColumns, excludedColumns));
+    } else {
+
+      return Observable.create(emitter -> {
+
+        // How many rows will it take to reach target bytes
+        long partitionSize = (size) / (table.bytes / table.rows);
+
+        String primaryKeys = table.columns.stream()
+            .filter(c -> c.isPrimaryKey)
+            .map(c -> "[" + c.name + "]")
+            .collect(Collectors.joining(","));
+
+        String primaryKeys2 = table.columns.stream()
+            .filter(c -> c.isPrimaryKey)
+            .map(c -> "p.[" + c.name + "] = c.[" + c.name + "]")
+            .collect(Collectors.joining(" AND "));
+
+        long offset = 0;
+        int part = 0;
+        do {
+          if (offset + partitionSize > table.rows) {
+            partitionSize = (table.rows - offset);
+          }
+          String sql = String
+              .format("WITH p AS (SELECT %1$s FROM %2$s WITH (NOLOCK) ORDER BY %1$s OFFSET %3$d ROWS FETCH NEXT %4$d ROWS ONLY) "
+                      + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
+                  primaryKeys, table.name, offset, partitionSize, primaryKeys2, String.join(", ", includedColumns));
+
+          emitter.onNext(
+              new AvroFile(table, sql,
+                  finalPath.replace("%{PART}", String.format(Locale.CANADA, "%04d", part++)),
+                  includedColumns,
+                  excludedColumns));
+          offset += partitionSize;
+        } while (offset < table.rows);
+
+        emitter.onComplete();
+
+      });
+    }
   }
 
   private boolean isSupportedType(int type) {

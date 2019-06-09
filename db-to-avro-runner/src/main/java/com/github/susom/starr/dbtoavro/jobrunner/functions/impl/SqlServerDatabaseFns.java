@@ -90,73 +90,67 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   }
 
   @Override
-  public Observable<Table> getTables(String catalog, String schema) {
+  public Observable<Table> getTables(String catalog, String schema, List<String> filter) {
     return dbb.withConnectionAccess().transactRx(db -> {
+      db.get().underlyingConnection().setCatalog(catalog);
+      db.get().underlyingConnection().setSchema(schema);
+
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
         List<Table> tablesList = new ArrayList<>();
         while (tables.next()) {
           String name = tables.getString(3);
-          tablesList.add(new Table(catalog, schema, name));
+          if (filter.size() > 0 && !filter.contains(name)) continue;
+
+          // Retrieve columns
+          List<Column> cols = new ArrayList<>();
+          try (ResultSet columns = metadata.getColumns(catalog, schema, name, "%")) {
+            while (columns.next()) {
+              String colName = columns.getString(4);
+              int type = columns.getInt(5);
+              cols.add(new Column(colName, type));
+            }
+            // Get primary keys
+            try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name)) {
+              while (pks.next()) {
+                String colName = pks.getString(4);
+                cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
+              }
+            }
+          }
+
+          // Size of table in bytes
+          long bytes = 0;
+          try (CallableStatement spaceUsed = db.get().underlyingConnection()
+              .prepareCall("{call sp_spaceused(?)}")) {
+            spaceUsed.setString(1, schema + "." + name);
+            if (spaceUsed.execute()) {
+              try (ResultSet rs = spaceUsed.getResultSet()) {
+                while (rs.next()) {
+                  bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+                }
+              }
+            }
+          } catch (SQLException ignored) {
+          }
+
+          // Number of rows
+          long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+              + "FROM sys.objects OBJECTS\n"
+              + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+              + "WHERE OBJECTS.type = 'U'\n"
+              + "  AND PARTITIONS.index_id < 2\n"
+              + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+              + "  AND OBJECTS.Name = ?")
+              .argString(schema)
+              .argString(name)
+              .queryLongOrZero();
+
+          tablesList.add(new Table(catalog, schema, name, cols, bytes, rows));
         }
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);
-  }
-
-  @Override
-  public Completable introspect(final Table table) {
-    LOGGER.info("Introspecting {}", table.name);
-    return dbb.withConnectionAccess().transactRx(db -> {
-      db.get().underlyingConnection().setCatalog(table.catalog);
-      db.get().underlyingConnection().setSchema(table.schema);
-
-      // Retrieve columns
-      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-      List<Column> cols = new ArrayList<>();
-      try (ResultSet columns = metadata.getColumns(table.catalog, table.schema, table.name, "%")) {
-        while (columns.next()) {
-          String colName = columns.getString(4);
-          int type = columns.getInt(5);
-          cols.add(new Column(colName, type));
-        }
-        // Get primary keys
-        try (ResultSet pks = metadata.getPrimaryKeys(table.catalog, table.schema, table.name)) {
-          while (pks.next()) {
-            String colName = pks.getString(4);
-            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
-          }
-        }
-      }
-      table.columns.addAll(cols);
-
-      // Size of table in bytes
-      try (CallableStatement spaceUsed = db.get().underlyingConnection()
-          .prepareCall("{call sp_spaceused(?)}")) {
-        spaceUsed.setString(1, table.schema + "." + table.name);
-        if (spaceUsed.execute()) {
-          try (ResultSet rs = spaceUsed.getResultSet()) {
-            while (rs.next()) {
-              table.bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
-            }
-          }
-        }
-      } catch (SQLException ignored) {
-      }
-
-      // Number of rows
-      table.rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-          + "FROM sys.objects OBJECTS\n"
-          + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-          + "WHERE OBJECTS.type = 'U'\n"
-          + "  AND PARTITIONS.index_id < 2\n"
-          + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-          + "  AND OBJECTS.Name = ?")
-          .argString(table.schema)
-          .argString(table.name)
-          .queryLongOrZero();
-
-    });
   }
 
   @Override
