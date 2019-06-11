@@ -47,14 +47,17 @@ public class SqlServerAvroFns implements AvroFns {
   private final DatabaseProviderRx.Builder dbb;
   private final int fetchSize;
   private CodecFactory codec;
+  private boolean dbSplit;
 
   public SqlServerAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
     this.fetchSize = config.getInteger("avro.fetchsize", 10000);
     this.codec = CodecFactory.fromString(config.getString("avro.codec", "snappy"));
+    this.dbSplit = config.getBooleanOrFalse("sqlserver.dbsplit");
   }
 
   @Override
+  // TODO: This needs to emit multiple objects if the ETL has split the file
   public Observable<AvroFile> saveAvroFile(final AvroFile avroFile) {
     return dbb.withConnectionAccess().transactRx(db -> {
       Table table = avroFile.table;
@@ -68,7 +71,9 @@ public class SqlServerAvroFns implements AvroFns {
           .withCodec(CodecFactory.snappyCodec())
           .withCodec(codec)
           .fetchSize(fetchSize)
+          .rowsPerFile(avroFile.targetSize)
           .start();
+
       avroFile.endTime = DateTime.now().toString();
       avroFile.bytes = new File(avroFile.path).length();
 
@@ -83,7 +88,7 @@ public class SqlServerAvroFns implements AvroFns {
    * <p>If the table cannot be split, a single partition is emitted.</p>
    */
   @Override
-  public Observable<AvroFile> getPartitions(Table table, String path, long size) {
+  public Observable<AvroFile> getPartitions(final Table table, final String path, final long targetSize) {
 
     // Only dump the supported column types
     List<String> includedColumns = new ArrayList<>();
@@ -101,53 +106,58 @@ public class SqlServerAvroFns implements AvroFns {
         .replace("%{CATALOG}", table.catalog);
 
     // Check if table doesn't meet partitioning criteria
-    if (table.bytes == 0 || table.rows == 0 || table.bytes < size || size == 0 ||
+    if (!dbSplit || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize || targetSize == 0 ||
         table.columns.stream().noneMatch(c -> c.isPrimaryKey)) {
       String sql = String
           .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", includedColumns), table.schema,
               table.name);
+      long rows = 0;
+      if (targetSize > 0 && table.bytes > 0 && table.rows > 0) {
+        rows = (targetSize) / (table.bytes / table.rows);
+      }
       return Observable
-          .just(new AvroFile(table, sql, finalPath.replace("-%{PART}", ""), includedColumns, excludedColumns));
-    } else {
-
-      return Observable.create(emitter -> {
-
-        // How many rows will it take to reach target bytes
-        long partitionSize = (size) / (table.bytes / table.rows);
-
-        String primaryKeys = table.columns.stream()
-            .filter(c -> c.isPrimaryKey)
-            .map(c -> "[" + c.name + "]")
-            .collect(Collectors.joining(","));
-
-        String primaryKeys2 = table.columns.stream()
-            .filter(c -> c.isPrimaryKey)
-            .map(c -> "p.[" + c.name + "] = c.[" + c.name + "]")
-            .collect(Collectors.joining(" AND "));
-
-        long offset = 0;
-        int part = 0;
-        do {
-          if (offset + partitionSize > table.rows) {
-            partitionSize = (table.rows - offset);
-          }
-          String sql = String
-              .format("WITH p AS (SELECT %1$s FROM %2$s WITH (NOLOCK) ORDER BY %1$s OFFSET %3$d ROWS FETCH NEXT %4$d ROWS ONLY) "
-                      + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
-                  primaryKeys, table.name, offset, partitionSize, primaryKeys2, String.join(", ", includedColumns));
-
-          emitter.onNext(
-              new AvroFile(table, sql,
-                  finalPath.replace("%{PART}", String.format(Locale.CANADA, "%04d", part++)),
-                  includedColumns,
-                  excludedColumns));
-          offset += partitionSize;
-        } while (offset < table.rows);
-
-        emitter.onComplete();
-
-      });
+          .just(new AvroFile(table, sql, finalPath, includedColumns, excludedColumns, rows));
     }
+
+    // Otherwise split the table using a naive primary key splitting method
+    return Observable.create(emitter -> {
+
+      // Estimate how many rows it will take to reach the target file size for avro output
+      long partitionSize = (targetSize) / (table.bytes / table.rows);
+
+      String primaryKeys = table.columns.stream()
+          .filter(c -> c.isPrimaryKey)
+          .map(c -> "[" + c.name + "]")
+          .collect(Collectors.joining(","));
+
+      String joinKeys = table.columns.stream()
+          .filter(c -> c.isPrimaryKey)
+          .map(c -> "p.[" + c.name + "] = c.[" + c.name + "]")
+          .collect(Collectors.joining(" AND "));
+
+      long offset = 0;
+      int part = 0;
+      do {
+        if (offset + partitionSize > table.rows) {
+          partitionSize = (table.rows - offset);
+        }
+        String sql = String
+            .format(
+                "WITH p AS (SELECT %1$s FROM %2$s WITH (NOLOCK) ORDER BY %1$s OFFSET %3$d ROWS FETCH NEXT %4$d ROWS ONLY) "
+                    + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
+                primaryKeys, table.name, offset, partitionSize, joinKeys, String.join(", ", includedColumns));
+
+        emitter.onNext(
+            new AvroFile(table, sql, finalPath.replace("%{PART}", String.format(Locale.CANADA, "%04d", part++)),
+                includedColumns, excludedColumns));
+
+        offset += partitionSize;
+      } while (offset < table.rows);
+
+      emitter.onComplete();
+
+    });
+
   }
 
   private boolean isSupportedType(int type) {
