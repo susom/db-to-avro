@@ -71,7 +71,7 @@ public class SqlServerAvroFns implements AvroFns {
           .withCodec(CodecFactory.snappyCodec())
           .withCodec(codec)
           .fetchSize(fetchSize)
-          .rowsPerFile(avroFile.targetSize)
+          .rowsPerFile(avroFile.rowsPerFile)
           .start();
 
       avroFile.endTime = DateTime.now().toString();
@@ -81,15 +81,8 @@ public class SqlServerAvroFns implements AvroFns {
     }).toObservable();
   }
 
-  /**
-   * {@inheritDoc}
-   * <p>Attempts to split table into partitions using the primary key(s).</p>
-   * <p>This works best if the table primary keys are a clustered index.</p>
-   * <p>If the table cannot be split, a single partition is emitted.</p>
-   */
   @Override
-  public Observable<AvroFile> getPartitions(final Table table, final String path, final long targetSize) {
-
+  public Observable<AvroFile> singleQuery(final Table table, final String path, final long targetSize) {
     // Only dump the supported column types
     List<String> includedColumns = new ArrayList<>();
     List<String> excludedColumns = new ArrayList<>();
@@ -105,22 +98,51 @@ public class SqlServerAvroFns implements AvroFns {
         .replace("%{SCHEMA}", table.schema)
         .replace("%{CATALOG}", table.catalog);
 
-    // Check if table doesn't meet partitioning criteria
+    String sql = String
+        .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", includedColumns), table.schema,
+            table.name);
+
+    long rowsPerFile = 0;
+    if (targetSize > 0 && table.bytes > 0 && table.rows > 0) {
+      rowsPerFile = (targetSize) / (table.bytes / table.rows);
+    }
+
+    return Observable.just(new AvroFile(table, sql, finalPath, includedColumns, excludedColumns, rowsPerFile));
+  }
+
+
+  /**
+   * {@inheritDoc}
+   * <p>Attempts to split table into partitions using the primary key(s).</p>
+   * <p>This works best if the table primary keys are a clustered index.</p>
+   * <p>If the table cannot be split, a single partition is emitted.</p>
+   */
+  @Override
+  public Observable<AvroFile> multipleQuery(final Table table, final String path, final long targetSize) {
+
+    // Check if table doesn't meet partitioning criteria, if not, bail.
     if (!dbSplit || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize || targetSize == 0 ||
         table.columns.stream().noneMatch(c -> c.isPrimaryKey)) {
-      String sql = String
-          .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", String.join(", ", includedColumns), table.schema,
-              table.name);
-      long rows = 0;
-      if (targetSize > 0 && table.bytes > 0 && table.rows > 0) {
-        rows = (targetSize) / (table.bytes / table.rows);
-      }
-      return Observable
-          .just(new AvroFile(table, sql, finalPath, includedColumns, excludedColumns, rows));
+      return Observable.empty();
     }
 
     // Otherwise split the table using a naive primary key splitting method
     return Observable.create(emitter -> {
+
+      // Only dump the supported column types
+      List<String> includedColumns = new ArrayList<>();
+      List<String> excludedColumns = new ArrayList<>();
+      for (Column column : table.columns) {
+        if (isSupportedType(column.type)) {
+          includedColumns.add("[" + column.name + "]");
+        } else {
+          excludedColumns.add(column.name);
+        }
+      }
+
+      String finalPath = path.replace("%{TABLE}", table.name)
+          .replace("%{SCHEMA}", table.schema)
+          .replace("%{CATALOG}", table.catalog);
 
       // Estimate how many rows it will take to reach the target file size for avro output
       long partitionSize = (targetSize) / (table.bytes / table.rows);

@@ -5,7 +5,6 @@ public class Column {
   public String name;
   public int type;
   public boolean isPrimaryKey;
-  public long distinct;
 
   public Column(String name, int type) {
     this.name = name;

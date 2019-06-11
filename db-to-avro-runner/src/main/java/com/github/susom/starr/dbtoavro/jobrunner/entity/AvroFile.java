@@ -13,18 +13,18 @@ public class AvroFile {
   public String endTime;
   public String sql;
   public long bytes;
-  public long targetSize;
+  public long rowsPerFile;
 
   public List<String> includedColumns;
   public List<String> excludedColumns;
 
-  public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns, long targetSize) {
+  public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns, long rowsPerFile) {
     this.table = table;
     this.sql = sql;
     this.path = path;
     this.includedColumns = includedColumns;
     this.excludedColumns = excludedColumns;
-    this.targetSize = targetSize;
+    this.rowsPerFile = rowsPerFile;
   }
 
   public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns) {

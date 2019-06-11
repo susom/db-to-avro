@@ -63,10 +63,21 @@ public class AvroExporter implements Exporter {
                               .filter(t -> job.tables.isEmpty() || job.tables.contains(t.name))
                               .flatMap(table ->
 
-                                  avroFns.getPartitions(table, path, targetSize)
-                                      .flatMap(partition ->
-                                          avroFns.saveAvroFile(partition)
+                                  // TODO: add toLowercase option to ETL schema builder
+                                  // by default clean the table and column names
+                                  //
+
+                                  avroFns.multipleQuery(table, path, targetSize)
+                                      .flatMap(many ->
+                                          avroFns.saveAvroFile(many)
                                               .subscribeOn(Schedulers.from(dbPoolSched))
+                                      )
+                                      .switchIfEmpty(
+                                          avroFns.singleQuery(table, path, targetSize)
+                                              .flatMap(single ->
+                                                  avroFns.saveAvroFile(single)
+                                                      .subscribeOn(Schedulers.from(dbPoolSched))
+                                              )
                                       )
 
                               )
