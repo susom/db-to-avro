@@ -51,6 +51,8 @@ public interface DatabaseFns {
 
   Observable<String> getSchemas(String catalog);
 
-  Observable<Table> getTables(String catalog, String schema, List<String> filter);
+  Observable<String> getTables(String catalog, String schema);
+
+  Observable<Table> introspect(String catalog, String schema, String table);
 
   }

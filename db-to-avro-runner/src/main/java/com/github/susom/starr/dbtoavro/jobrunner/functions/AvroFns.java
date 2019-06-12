@@ -23,7 +23,7 @@ public interface AvroFns {
    * 0 for no partitioning.
    * @return unsaved AvroFile instances
    */
-  Observable<AvroFile> multipleQuery(final Table table, final String path, final long targetSize);
+  Observable<AvroFile> optimizedQuery(final Table table, final String path, final long targetSize);
 
   /**
    * Emits unsaved AvroFile instances created by dumping the entire table using a single SQL query
@@ -34,6 +34,6 @@ public interface AvroFns {
    * 0 for no partitioning.
    * @return unsaved AvroFile instances
    */
-  Observable<AvroFile> singleQuery(final Table table, final String path, final long targetSize);
+  Observable<AvroFile> query(final Table table, final String path, final long targetSize);
 
 }

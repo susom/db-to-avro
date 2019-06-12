@@ -1,7 +1,5 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
-import java.util.List;
-
 /**
  * Simple pojo representing an Avro export from an SQL query
  */
@@ -13,26 +11,19 @@ public class AvroFile {
   public String endTime;
   public String sql;
   public long bytes;
-  public long rowsPerFile;
+  public long divisor;
 
-  public List<String> includedColumns;
-  public List<String> excludedColumns;
-
-  public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns, long rowsPerFile) {
+  public AvroFile(Table table, String sql, String path, long divisor) {
     this.table = table;
     this.sql = sql;
     this.path = path;
-    this.includedColumns = includedColumns;
-    this.excludedColumns = excludedColumns;
-    this.rowsPerFile = rowsPerFile;
+    this.divisor = divisor;
   }
 
-  public AvroFile(Table table, String sql, String path, List<String> includedColumns, List<String> excludedColumns) {
+  public AvroFile(Table table, String sql, String path) {
     this.table = table;
     this.sql = sql;
     this.path = path;
-    this.includedColumns = includedColumns;
-    this.excludedColumns = excludedColumns;
   }
 
 

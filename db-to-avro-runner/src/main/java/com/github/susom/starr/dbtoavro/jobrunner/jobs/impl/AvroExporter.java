@@ -59,21 +59,22 @@ public class AvroExporter implements Exporter {
                       .filter(job.schemas::contains) // filter out unwanted schemas
                       .flatMap(schema ->
 
-                          dbFns.getTables(catalog, schema, job.tables)
-                              .filter(t -> job.tables.isEmpty() || job.tables.contains(t.name))
+                          dbFns.getTables(catalog, schema)
+                              .filter(name -> job.tables.isEmpty() || job.tables.contains(name))
+                              .flatMap(table -> dbFns.introspect(catalog, schema, table)
+                                  .subscribeOn(Schedulers.from(dbPoolSched)))
                               .flatMap(table ->
 
                                   // TODO: add toLowercase option to ETL schema builder
                                   // by default clean the table and column names
-                                  //
 
-                                  avroFns.multipleQuery(table, path, targetSize)
+                                  avroFns.optimizedQuery(table, path, targetSize)
                                       .flatMap(many ->
                                           avroFns.saveAvroFile(many)
                                               .subscribeOn(Schedulers.from(dbPoolSched))
                                       )
                                       .switchIfEmpty(
-                                          avroFns.singleQuery(table, path, targetSize)
+                                          avroFns.query(table, path, targetSize)
                                               .flatMap(single ->
                                                   avroFns.saveAvroFile(single)
                                                       .subscribeOn(Schedulers.from(dbPoolSched))

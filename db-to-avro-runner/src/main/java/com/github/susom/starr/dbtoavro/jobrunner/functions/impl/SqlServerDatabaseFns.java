@@ -30,8 +30,10 @@ import java.sql.CallableStatement;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +41,26 @@ import org.slf4j.LoggerFactory;
  * Sql-server specific SQL statements, for various database tasks
  */
 public class SqlServerDatabaseFns implements DatabaseFns {
+
+  private static int[] serializable = {
+      Types.BIGINT,
+      Types.BINARY,
+      Types.BLOB,
+      Types.CHAR,
+      Types.CLOB,
+      Types.DOUBLE,
+      Types.INTEGER,
+      Types.NCHAR,
+      Types.NCLOB,
+      Types.NUMERIC,
+      Types.NVARCHAR,
+      Types.REAL,
+      Types.SMALLINT,
+      Types.TINYINT,
+      Types.TIMESTAMP,
+//      Types.VARBINARY, // This is SpatialLocation in MSSQL
+      Types.VARCHAR
+  };
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
@@ -90,63 +112,74 @@ public class SqlServerDatabaseFns implements DatabaseFns {
   }
 
   @Override
-  public Observable<Table> getTables(String catalog, String schema, List<String> filter) {
+  public Observable<Table> introspect(String catalog, String schema, String table) {
     return dbb.withConnectionAccess().transactRx(db -> {
+      LOGGER.info("Introspecting table {}", table);
       db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
 
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+
+      // Retrieve columns
+      List<Column> cols = new ArrayList<>();
+      try (ResultSet columns = metadata.getColumns(catalog, schema, table, "%")) {
+        while (columns.next()) {
+          String colName = columns.getString(4);
+          int type = columns.getInt(5);
+          String typeName = columns.getString(6);
+          cols.add(new Column(colName, type, typeName, isSerializable(type)));
+        }
+        // Get primary keys
+        try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
+          while (pks.next()) {
+            String colName = pks.getString(4);
+            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.primaryKey = true);
+          }
+        }
+      }
+
+      // Size of table in bytes
+      long bytes = 0;
+      try (CallableStatement spaceUsed = db.get().underlyingConnection()
+          .prepareCall("{call sp_spaceused(?)}")) {
+        spaceUsed.setString(1, schema + "." + table);
+        if (spaceUsed.execute()) {
+          try (ResultSet rs = spaceUsed.getResultSet()) {
+            while (rs.next()) {
+              bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+            }
+          }
+        }
+      } catch (SQLException ignored) {
+      }
+
+      // Number of rows
+      long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
+          + "FROM sys.objects OBJECTS\n"
+          + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
+          + "WHERE OBJECTS.type = 'U'\n"
+          + "  AND PARTITIONS.index_id < 2\n"
+          + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
+          + "  AND OBJECTS.Name = ?")
+          .argString(schema)
+          .argString(table)
+          .queryLongOrZero();
+
+      return new Table(catalog, schema, table, cols, bytes, rows);
+
+    }).toObservable();
+  }
+
+  @Override
+  public Observable<String> getTables(String catalog, String schema) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      db.get().underlyingConnection().setCatalog(catalog);
+      db.get().underlyingConnection().setSchema(schema);
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
-        List<Table> tablesList = new ArrayList<>();
+        List<String> tablesList = new ArrayList<>();
         while (tables.next()) {
-          String name = tables.getString(3);
-          if (filter.size() > 0 && !filter.contains(name)) continue;
-
-          // Retrieve columns
-          List<Column> cols = new ArrayList<>();
-          try (ResultSet columns = metadata.getColumns(catalog, schema, name, "%")) {
-            while (columns.next()) {
-              String colName = columns.getString(4);
-              int type = columns.getInt(5);
-              cols.add(new Column(colName, type));
-            }
-            // Get primary keys
-            try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, name)) {
-              while (pks.next()) {
-                String colName = pks.getString(4);
-                cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.isPrimaryKey = true);
-              }
-            }
-          }
-
-          // Size of table in bytes
-          long bytes = 0;
-          try (CallableStatement spaceUsed = db.get().underlyingConnection()
-              .prepareCall("{call sp_spaceused(?)}")) {
-            spaceUsed.setString(1, schema + "." + name);
-            if (spaceUsed.execute()) {
-              try (ResultSet rs = spaceUsed.getResultSet()) {
-                while (rs.next()) {
-                  bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
-                }
-              }
-            }
-          } catch (SQLException ignored) {
-          }
-
-          // Number of rows
-          long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-              + "FROM sys.objects OBJECTS\n"
-              + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-              + "WHERE OBJECTS.type = 'U'\n"
-              + "  AND PARTITIONS.index_id < 2\n"
-              + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-              + "  AND OBJECTS.Name = ?")
-              .argString(schema)
-              .argString(name)
-              .queryLongOrZero();
-
-          tablesList.add(new Table(catalog, schema, name, cols, bytes, rows));
+          tablesList.add(tables.getString(3));
         }
         return tablesList;
       }
@@ -231,6 +264,10 @@ public class SqlServerDatabaseFns implements DatabaseFns {
               sql.append("FILE=1, REPLACE, STATS=1");
               return Single.just(sql.toString());
             });
+  }
+
+  private boolean isSerializable(int type) {
+    return IntStream.of(serializable).anyMatch(x -> x == type);
   }
 
 }

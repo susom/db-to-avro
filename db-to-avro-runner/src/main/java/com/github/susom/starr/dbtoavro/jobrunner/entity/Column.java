@@ -4,11 +4,15 @@ public class Column {
 
   public String name;
   public int type;
-  public boolean isPrimaryKey;
+  public String typeName;
+  public boolean primaryKey;
+  public boolean serializable;
 
-  public Column(String name, int type) {
+  public Column(String name, int type, String typeName, boolean serializable) {
     this.name = name;
     this.type = type;
+    this.typeName = typeName;
+    this.serializable = serializable;
   }
 
 }

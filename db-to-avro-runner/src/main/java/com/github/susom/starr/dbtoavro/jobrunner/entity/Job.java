@@ -37,21 +37,7 @@ public class Job {
   public final Flavor flavor;
   public final String destination;
   public final String connection;
-
-  private Job(long id, List<String> backupFiles, String backupDir, String catalog, List<String> schemas,
-      List<String> tables, String postSql, String preSql, Flavor flavor, String destination, String connection) {
-    this.id = id;
-    this.backupFiles = backupFiles;
-    this.backupDir = backupDir;
-    this.catalog = catalog;
-    this.schemas = schemas;
-    this.tables = tables;
-    this.postSql = postSql;
-    this.preSql = preSql;
-    this.flavor = flavor;
-    this.destination = destination;
-    this.connection = connection;
-  }
+  public List<AvroFile> avroFiles;
 
   public Job(Builder builder) {
     this.id = builder.id;

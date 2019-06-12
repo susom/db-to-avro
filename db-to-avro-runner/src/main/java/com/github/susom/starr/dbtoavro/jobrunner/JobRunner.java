@@ -26,7 +26,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
 import io.reactivex.Completable;
 import java.io.File;
 import java.io.PrintStream;
@@ -79,11 +78,10 @@ public class JobRunner {
       Gson gson = new GsonBuilder().setPrettyPrinting().create();
       return new AvroExporter(config, dbb).run(job, loader)
           .toList()
-          .doOnSuccess(avros -> {
-            JsonObject json = new JsonObject();
-            json.add("AvroFiles", gson.toJsonTree(avros));
+          .doOnSuccess(avro -> {
+            job.avroFiles = avro;
             try (PrintStream ps = new PrintStream(job.destination + File.separator + outputFile)) {
-              ps.println(gson.toJson(json));
+              ps.println(gson.toJson(job));
             }
             LOGGER.info("Wrote output to {}", outputFile);
           })
