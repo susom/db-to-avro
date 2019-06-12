@@ -2,6 +2,9 @@ package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
 import java.util.List;
 
+/**
+ * Simple pojo representing an introspected database table
+ */
 public class Table {
 
   public String catalog;

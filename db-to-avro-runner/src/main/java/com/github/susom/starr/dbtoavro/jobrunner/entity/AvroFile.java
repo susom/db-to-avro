@@ -1,30 +1,24 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
+import java.util.List;
+
 /**
- * Simple pojo representing an Avro export from an SQL query
+ * Simple pojo representing the result of running a query
  */
 public class AvroFile {
 
-  public Table table;
-  public String path;
+  public Query query;
+  public List<String> output;
   public String startTime;
   public String endTime;
-  public String sql;
   public long bytes;
-  public long divisor;
 
-  public AvroFile(Table table, String sql, String path, long divisor) {
-    this.table = table;
-    this.sql = sql;
-    this.path = path;
-    this.divisor = divisor;
+  public AvroFile(Query query, List<String> output, String startTime, String endTime, long bytes) {
+    this.query = query;
+    this.output = output;
+    this.startTime = startTime;
+    this.endTime = endTime;
+    this.bytes = bytes;
   }
-
-  public AvroFile(Table table, String sql, String path) {
-    this.table = table;
-    this.sql = sql;
-    this.path = path;
-  }
-
 
 }

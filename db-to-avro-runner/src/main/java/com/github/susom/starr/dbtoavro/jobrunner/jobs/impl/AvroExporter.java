@@ -45,8 +45,10 @@ public class AvroExporter implements Exporter {
 
     return loader.run(job)
         .flatMapObservable(database -> {
+
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
           DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
+
           if (avroFns == null || dbFns == null) {
             return Observable.error(new Exception("Unsupported database flavor!"));
           }
@@ -65,18 +67,15 @@ public class AvroExporter implements Exporter {
                                   .subscribeOn(Schedulers.from(dbPoolSched)))
                               .flatMap(table ->
 
-                                  // TODO: add toLowercase option to ETL schema builder
-                                  // by default clean the table and column names
-
-                                  avroFns.optimizedQuery(table, path, targetSize)
+                                  avroFns.optimizedQuery(table, targetSize)
                                       .flatMap(many ->
-                                          avroFns.saveAvroFile(many)
+                                          avroFns.saveAvroFile(many, path)
                                               .subscribeOn(Schedulers.from(dbPoolSched))
                                       )
                                       .switchIfEmpty(
-                                          avroFns.query(table, path, targetSize)
+                                          avroFns.query(table, targetSize)
                                               .flatMap(single ->
-                                                  avroFns.saveAvroFile(single)
+                                                  avroFns.saveAvroFile(single, path)
                                                       .subscribeOn(Schedulers.from(dbPoolSched))
                                               )
                                       )

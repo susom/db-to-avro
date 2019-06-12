@@ -7,6 +7,9 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 
+/**
+ * Factory methods for retrieving implementations for each database vendor
+ */
 public class FnFactory {
 
   public static AvroFns getAvroFns(Flavor flav, Config config, DatabaseProviderRx.Builder dbb)  {

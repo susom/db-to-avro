@@ -5,87 +5,121 @@ temporary Docker container running the appropriate vendor database, and then exp
 
 ### Current Progress
 
-This application is in alpha status, and currently supports loading a Microsoft SQL Server backup into a container. 
-
-### Planned Features
-
-The application will eventually support:
-* Loading Oracle datapump exports and Microsoft SQL Server backups into a docker container.
-
-* Selectively exporting schemas / tables within the loaded database as .avro files using various methods depending on the size of the source database: 
-  
-  * Multi-threaded (table-level) Avro creation using [Stride Util](https://github.com/susom/stride-util/blob/master/src/main/java/com/github/susom/stride/server/container/OracleEtl.java).
-  
-  * Multi-threaded Avro (table-level) creation using [Apache Sqoop](https://sqoop.apache.org/) v1 in standalone mode. 
-  
-  * Multi-threaded (row-level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) v1 on a Hadoop cluster running in Google Cloud Dataproc.   
-
-  * *(possible)* Multi-threaded (row-level) exporting to Avro using [Apache Sqoop](https://sqoop.apache.org/) on a Hadoop cluster running in Docker / Kubernetes. 
+This application is in beta status, and currently supports loading a Microsoft SQL Server backup into a container and exporting as Avro. Oracle support is forthcoming.
 
 ### Architecture
 
-Jobs are defined as an asynchronous functional expression using [RxJava2](https://github.com/ReactiveX/RxJava). 
-Different types of jobs can be chained together for more complex operations.
+On a host running docker, the application will instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
+If a database is already running, the restore step can be skipped by providing a JDBC connection string.
 
-Example: 
-```java
-public static Completable Restore(DockerFns docker, DatabaseFns sql, Job job, JobLogger logger) {
+The application is asynchronous and multi-threaded using [RxJava2](https://github.com/ReactiveX/RxJava).
 
-    return docker.create().flatMapCompletable(containerId ->
-        docker.start(containerId) // (1)
-            .doOnComplete(() -> logger.log(String.format("Container %s started, waiting for database to boot", containerId)))
-            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(3, 2000))) // (2)
+### Basic Command Line Usage
 
-            // Execute pre-sql commands
-            .andThen(sql.transact(job.getPreSql())) // (3)
-            .doOnComplete(() -> logger.log("Database pre-sql completed"))
-
-            .doOnComplete(() -> logger.log("Starting database restore"))
-            .andThen(sql.getRestoreSql(job.getDatabaseName(), job.getBackupFiles()) // (4)
-                .flatMapObservable(ddl ->
-                    docker.execSqlShell(containerId, ddl) // (5)
-                        .observeOn(Schedulers.io())))
-            .filter(p -> p.getPercent() != -1)
-            .doOnNext(p -> logger.progress(p.getPercent(), 100)).ignoreElements() // (6)
-            .doOnComplete(() -> logger.log("Restore completed"))
-
-            .andThen(sql.transact(job.getPostSql())) // (7)
-            .doOnComplete(() -> logger.log("Database post-sql completed"))
-
-            .doOnComplete(() -> logger.log("Introspecting schema")) // (8)
-            .andThen(sql.getTables(job.getDatabaseName()))
-            .doOnSuccess(job::setTables)
-            .ignoreElement()
-
-            .doOnComplete(() -> logger.log(String.format("Stopping container %s", containerId))) // (9)
-            .andThen(docker.stop(containerId))
-
-            .doOnComplete(() -> logger.log(String.format("Deleting container %s", containerId)))
-            .andThen(docker.destroy(containerId))
-
-            .doOnComplete(() -> logger.log("Job complete!")));
-  }
+```bash
+java -jar db-to-avro.jar \
+   --flavor=sqlserver \
+   --backup-dir=Backups/ \
+   --backup-files=AdventureWorksDW2016_EXT.bak
+   --catalog=AdventureWorks2016 \
+   --schemas=dbo \
+   --destination=avro/
 ```
 
-The example above does the following: 
-1. Creates a database docker container and starts it.
-2. Waits for the database to go online. 
-3. Executes an SQL script to prepare the database for the restore. 
-4. Introspects the backup file and creates SQL code for initiating the restore.
-5. Initiates the database restore in a new thread.
-6. Reports progress to the runner while the database is being restored.
-7. Executes an SQL script to clean up.
-8. Enumerates the tables with their row counts, stores the result in the Job.
-9. Stops and deletes the container. 
+This will restore the Microsoft AdventureWorks database from a backup set located in `/Backups`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
+All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
 
-During the entire operation, progress of the Job is recorded along with the percent complete during the database restore operation.
+### Exporting an Existing Database
 
-After the Job Runner finishes the above operation, the final result is marked as Success or Failed, and the Job is output as JSON for downstream systems. 
+```bash
+java -jar db-to-avro.jar \
+  --connect="jdbc:sqlserver://localhost" \
+  --user="SA" \
+  --password="..."  \
+  --flavor=sqlserver  \
+  --catalog=AdventureWorks2016 \
+  --schemas=dbo  \
+  --destination=avro/
+```
+
+This does the same as the above, but instead of loading a database backup, it will use the database pointed at by the connection string.
+All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
+
+### Command Line Options
+
+```bash
+Option (* = required)    Description
+---------------------    -----------
+* --flavor <Flavor>      database type (sqlserver, oracle)
+--connect <String>       jdbc connection string for existing database
+--user <String>          database user (existing db)
+--password <String>      database password (existing db)
+--backup-dir <String>    directory containing backup to restore
+--backup-files <String>  comma-delimited list of backup files
+--destination <String>   avro destination directory
+--post-sql <String>      sql to execute after restore/connect
+--pre-sql <String>       sql to execute before restore/connect
+* --catalog <String>     catalog to export
+--schemas <String>       only export this comma-delimited list of schemas
+--tables <String>        only export this comma-delimited list of tables
+-h, --help               show help
+```
+
+### Example Configuration Properties
+
+```java
+# Application defaults, can be overridden by a job
+#
+# Note ${UUID} is substituted everywhere with the same random UUID at startup time
+
+# Docker host for managing containers
+docker.host=unix:///var/run/docker.sock
+
+# Make sure this is at least # threads or you will get Hikari connection timeouts
+database.pool.size=64
+
+# MS SQL Server defaults
+sqlserver.database.url=jdbc:sqlserver://localhost;user=SA;password=${UUID};database=master;autoCommit=false
+sqlserver.database.user=SA
+sqlserver.database.password=${UUID}
+sqlserver.image=mcr.microsoft.com/mssql/server:2017-latest
+sqlserver.env=ACCEPT_EULA=Y,SA_PASSWORD=${UUID}
+# Attempt to dump a table in parallel using partitions based on PKs
+sqlserver.optimized.enable=true
+
+# Oracle defaults
+oracle.database.user=system
+oracle.database.password=${UUID}
+oracle.image=oracle/database:12.2.0.1-ee
+
+# Target size for generated Avro files, based on *uncompressed* source table bytes. Tables under this size will not
+# be split into multiple files. Set to zero for unlimited file size.
+avro.targetsize=1000000000
+
+# How many rows to fetch per DB query
+avro.fetchsize=100000
+
+# Pattern for creating the Avro output.
+avro.filename=%{CATALOG}.%{SCHEMA}.%{TABLE}-%{PART}.avro
+
+# Filename for manifest
+avro.logfile=job.json
+
+# Avro compression codec (snappy or null recommended)
+avro.codec=snappy
+
+# Core-count multiplier determines number of avro threads
+avro.core.multiplier=0.75
+```
 
 ### Future Features
 
-Currently the application consists of a single module "jobrunner". More modules in the future can be added to call jobrunner from a REST API, Pubsub queue, etc.
+Currently the application consists of a single module "db-to-avro-runner". More modules in the future can be added to call this runner from a REST API, Pubsub queue, etc.
 
 ### TODO
 
-Lots, this application is currently under development.
+* Oracle support
+
+* SUSOM ETL library (from database-goodies) should have options for:
+  * Lowercasing entity names
+  * Cleaning entity names (remove newlines, "$", etc.)

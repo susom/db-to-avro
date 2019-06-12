@@ -22,7 +22,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
-import java.util.List;
 
 public interface DatabaseFns {
 
@@ -35,7 +34,7 @@ public interface DatabaseFns {
   Completable transact(String sql);
 
   /**
-   * Retrieve catalog, schema, table, and row-level information from a database
+   * Pointer to a database running in a docker container
    *
    * @param containerId running database
    * @return database object
@@ -44,15 +43,37 @@ public interface DatabaseFns {
 
   /**
    * Get catalogs in database
+   *
    * @param database database to query
    * @return observable of catalogs
    */
   Observable<String> getCatalogs(Database database);
 
+  /**
+   * Get schemas in catalog
+   *
+   * @param catalog catalog to query
+   * @return observable of schemas
+   */
   Observable<String> getSchemas(String catalog);
 
+  /**
+   * Get tables in a schema
+   *
+   * @param catalog catalog to query
+   * @param schema schema to query
+   * @return observable of catalogs
+   */
   Observable<String> getTables(String catalog, String schema);
 
+  /**
+   * Introspects a database table, required for selecting the appropriate splitting and exporting method.
+   *
+   * @param catalog catalog to query
+   * @param schema schema to query
+   * @param table table to introspect
+   * @return observable of table with row counts, byte sizes, and supported column information
+   */
   Observable<Table> introspect(String catalog, String schema, String table);
 
-  }
+}

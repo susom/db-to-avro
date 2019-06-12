@@ -7,7 +7,7 @@ import io.reactivex.Observable;
 public interface Exporter {
 
   /**
-   * Creates avro files based on job specifications
+   * Creates avro files based on job specifications and a provided database schema
    *
    * @param job job definition
    * @param loader database loader implementation

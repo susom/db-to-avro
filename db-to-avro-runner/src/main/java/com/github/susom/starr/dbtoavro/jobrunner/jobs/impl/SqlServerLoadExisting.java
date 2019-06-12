@@ -28,17 +28,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads an already existing SQL server instance
+ * Loads an (already) running SQL server instance
  */
 public class SqlServerLoadExisting implements Loader {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerLoadExisting.class);
 
   private SqlServerDatabaseFns db;
-  private Config config;
 
   public SqlServerLoadExisting(Config config, DatabaseProviderRx.Builder dbb) {
-    this.config = config;
     this.db = new SqlServerDatabaseFns(config, dbb);
   }
 

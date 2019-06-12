@@ -32,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import joptsimple.OptionException;
@@ -67,23 +66,16 @@ public class Main {
   private void launch(String[] args) throws IOException {
 
     OptionParser parser = new OptionParser();
-    OptionSpec<String> preSql = parser.accepts("pre-sql", "sql to execute before restore").withRequiredArg();
-    OptionSpec<String> postSql = parser.accepts("post-sql", "sql to execute after restore").withRequiredArg();
-    OptionSpec<String> catalog = parser.accepts("catalog", "catalogs to export").withRequiredArg().required();
-    OptionSpec<String> schemas = parser.accepts("schemas", "schemas to export")
+    OptionSpec<Flavor> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
         .withRequiredArg()
-        .ofType(String.class)
-        .withValuesSeparatedBy(',');
-    OptionSpec<String> tables = parser.accepts("tables", "tables to export")
-        .withRequiredArg()
-        .ofType(String.class)
-        .withValuesSeparatedBy(',');
+        .required()
+        .ofType(Flavor.class);
     OptionSpec<String> connection = parser.accepts("connect", "jdbc connection string for existing database")
         .withRequiredArg();
-    OptionSpec<String> user = parser.accepts("user", "database user")
+    OptionSpec<String> user = parser.accepts("user", "database user (existing db)")
         .requiredIf(connection)
         .withRequiredArg();
-    OptionSpec<String> password = parser.accepts("password", "database password")
+    OptionSpec<String> password = parser.accepts("password", "database password (existing db)")
         .requiredIf(connection)
         .withRequiredArg();
     OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore")
@@ -95,11 +87,18 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
-    OptionSpec<Flavor> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
-        .withRequiredArg()
-        .required()
-        .ofType(Flavor.class);
     OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
+    OptionSpec<String> catalog = parser.accepts("catalog", "catalog to export").withRequiredArg().required();
+    OptionSpec<String> schemas = parser.accepts("schemas", "only export this comma-delimited list of schemas")
+        .withRequiredArg()
+        .ofType(String.class)
+        .withValuesSeparatedBy(',');
+    OptionSpec<String> tables = parser.accepts("tables", "only export this comma-delimited list of tables")
+        .withRequiredArg()
+        .ofType(String.class)
+        .withValuesSeparatedBy(',');
+    OptionSpec<String> preSql = parser.accepts("pre-sql", "sql to execute before restore/connect").withRequiredArg();
+    OptionSpec<String> postSql = parser.accepts("post-sql", "sql to execute after restore/connect").withRequiredArg();
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
     // TODO:
@@ -107,7 +106,6 @@ public class Main {
     //  switches for listing catalogs, schemas, and tables
     //  switch for testing connection to db
     //  switch for setting file name pattern
-    //  switch for filtering table names
 
     try {
 
@@ -154,7 +152,7 @@ public class Main {
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
-      // -Duser.timezone=
+      // Really stress the importance of the timezone setting for the JVM
       String tz = System.getProperty("user.timezone");
       LOGGER.info("System time zone is {}, which will be used for dates with no timezone information.", tz);
       LOGGER.info("Set the -Duser.timezone= property if the source database is not {}.", tz);
@@ -169,7 +167,7 @@ public class Main {
             exit(1);
           })
           .blockingAwait();
-      System.out.println( (System.nanoTime() - start)/1000000000);
+      System.out.println((System.nanoTime() - start) / 1000000000);
 
     } catch (OptionException ex) {
       parser.printHelpOn(System.out);

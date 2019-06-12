@@ -1,6 +1,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
+import com.github.susom.starr.dbtoavro.jobrunner.entity.Query;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import io.reactivex.Observable;
 
@@ -9,31 +10,31 @@ public interface AvroFns {
   /**
    * Saves an AvroFile instance to disk
    *
-   * @param avroFile avro file to save
+   * @param query SQL query to pass to Avro export
+   * @param pathPattern a pattern for naming the Avro output. Supports %{CATALOG}, %{SCHEMA}, %{TABLE}, %{PART}
    * @return saved AvroFile instances
    */
-  Observable<AvroFile> saveAvroFile(AvroFile avroFile);
+  Observable<AvroFile> saveAvroFile(Query query, String pathPattern);
 
   /**
-   * Emits unsaved AvroFile instances representing subsets of a single table, or nothing if the table can't be partitioned.
+   * Constructs a query optimized for splitting a very large table into multiple avro files. If the table does not meet
+   * splitting criteria, or this database does not have an optimized export, an empty observable is returned.
    *
    * @param table table to split
-   * @param path expression for partitioned file
-   * @param targetSize target size of the partition, in (table) bytes. Compression may reduce this size considerably. Specify
-   * 0 for no partitioning.
+   * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
+   * considerably.
    * @return unsaved AvroFile instances
    */
-  Observable<AvroFile> optimizedQuery(final Table table, final String path, final long targetSize);
+  Observable<Query> optimizedQuery(final Table table, final long targetSize);
 
   /**
-   * Emits unsaved AvroFile instances created by dumping the entire table using a single SQL query
+   * Constructs a simple query for exporting a table using a single SQL query. (eg. SELECT * FROM ...)
    *
    * @param table table to split
-   * @param path expression for partitioned file
-   * @param targetSize target size of the partition, in (table) bytes. Compression may reduce this size considerably. Specify
-   * 0 for no partitioning.
+   * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
+   * considerably.
    * @return unsaved AvroFile instances
    */
-  Observable<AvroFile> query(final Table table, final String path, final long targetSize);
+  Observable<Query> query(final Table table, final long targetSize);
 
 }

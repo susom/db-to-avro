@@ -37,7 +37,9 @@ public class Job {
   public final Flavor flavor;
   public final String destination;
   public final String connection;
-  public List<AvroFile> avroFiles;
+
+  // Job output
+  public List<AvroFile> avro;
 
   public Job(Builder builder) {
     this.id = builder.id;

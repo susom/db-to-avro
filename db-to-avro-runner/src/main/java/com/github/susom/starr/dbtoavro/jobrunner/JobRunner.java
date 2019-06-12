@@ -79,7 +79,7 @@ public class JobRunner {
       return new AvroExporter(config, dbb).run(job, loader)
           .toList()
           .doOnSuccess(avro -> {
-            job.avroFiles = avro;
+            job.avro = avro;
             try (PrintStream ps = new PrintStream(job.destination + File.separator + outputFile)) {
               ps.println(gson.toJson(job));
             }

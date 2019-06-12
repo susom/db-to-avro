@@ -21,6 +21,7 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
@@ -36,7 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Restores an SQL server database from a backup file
+ * Restores an SQL server database from a native backup (.bak) file(s)
  */
 public class SqlServerLoadBackup implements Loader {
 
@@ -60,7 +61,7 @@ public class SqlServerLoadBackup implements Loader {
     List<String> mounts = new ArrayList<>();
     mounts.add(new File(job.backupDir) + ":/backup");
 
-    docker = new SqlServerDockerFns(config);
+    docker = FnFactory.getDockerFns(job.flavor, config);
 
     return docker.create(mounts).flatMap(containerId ->
         docker.start(containerId)
