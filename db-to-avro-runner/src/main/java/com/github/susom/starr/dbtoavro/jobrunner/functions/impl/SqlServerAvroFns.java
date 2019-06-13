@@ -26,40 +26,43 @@ public class SqlServerAvroFns implements AvroFns {
   private final int fetchSize;
   private CodecFactory codec;
   private boolean optimized;
+  private boolean tidy;
 
   public SqlServerAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
     this.fetchSize = config.getInteger("avro.fetchsize", 10000);
     this.codec = CodecFactory.fromString(config.getString("avro.codec", "snappy"));
     this.optimized = config.getBooleanOrFalse("sqlserver.optimized.enable");
+    this.tidy = config.getBooleanOrFalse("avro.tidy");
   }
 
   @Override
   public Observable<AvroFile> saveAsAvro(final Query query) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      Table table = query.table;
 
       String startTime = DateTime.now().toString();
-      db.get().underlyingConnection().setCatalog(table.catalog);
+      db.get().underlyingConnection().setCatalog(query.table.catalog);
 
       List<String> paths = new ArrayList<>();
       if (query.rowsPerFile > 0) {
         LOGGER.info("Writing {}", query.path);
         paths.addAll(Etl.saveQuery(
             db.get().toSelect(query.sql))
-            .asAvro(query.path, table.schema, table.name)
+            .asAvro(query.path, query.table.schema, query.table.name)
             .withCodec(CodecFactory.snappyCodec())
             .withCodec(codec)
             .fetchSize(fetchSize)
+            .withTidy(tidy)
             .start(query.rowsPerFile));
       } else {
         LOGGER.info("Writing {}", query.path);
         Etl.saveQuery(
             db.get().toSelect(query.sql))
-            .asAvro(query.path, table.schema, table.name)
+            .asAvro(query.path, query.table.schema, query.table.name)
             .withCodec(CodecFactory.snappyCodec())
             .withCodec(codec)
             .fetchSize(fetchSize)
+            .withTidy(tidy)
             .start();
         paths.add(query.path);
       }
@@ -89,15 +92,15 @@ public class SqlServerAvroFns implements AvroFns {
     long rowsPerFile = 0;
     if (targetSize > 0 && table.bytes > 0 && table.rows > 0 && table.bytes > targetSize) {
       path = pathPattern
-          .replace("%{CATALOG}", table.catalog)
-          .replace("%{SCHEMA}", table.schema)
-          .replace("%{TABLE}", table.name); // %{PART} is handled by downstream ETL
+          .replace("%{CATALOG}", tidy(table.catalog))
+          .replace("%{SCHEMA}", tidy(table.schema))
+          .replace("%{TABLE}", tidy(table.name));
       rowsPerFile = (targetSize) / (table.bytes / table.rows);
     } else {
       path = pathPattern
-          .replace("%{CATALOG}", table.catalog)
-          .replace("%{SCHEMA}", table.schema)
-          .replace("%{TABLE}", table.name)
+          .replace("%{CATALOG}", tidy(table.catalog))
+          .replace("%{SCHEMA}", tidy(table.schema))
+          .replace("%{TABLE}", tidy(table.name))
           .replace("-%{PART}", "");
 
     }
@@ -157,9 +160,9 @@ public class SqlServerAvroFns implements AvroFns {
                 primaryKeys, table.name, offset, partitionSize, joinKeys, columns);
 
         String path = pathPattern
-            .replace("%{CATALOG}", table.catalog)
-            .replace("%{SCHEMA}", table.schema)
-            .replace("%{TABLE}", table.name)
+            .replace("%{CATALOG}", tidy(table.catalog))
+            .replace("%{SCHEMA}", tidy(table.schema))
+            .replace("%{TABLE}", tidy(table.name))
             .replace("%{PART}", String.format("%03d", part++));
 
         emitter.onNext(new Query(table, sql, 0, path));
@@ -173,5 +176,16 @@ public class SqlServerAvroFns implements AvroFns {
 
   }
 
+  private String tidy(final String name) {
+    if (tidy){
+      return name
+          .replaceAll("[^a-zA-Z0-9]", " ")
+          .replaceAll("\\s", "_")
+          .trim()
+          .toLowerCase();
+    } else {
+      return name;
+    }
+  }
 
 }
