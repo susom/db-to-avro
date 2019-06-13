@@ -67,15 +67,15 @@ public class AvroExporter implements Exporter {
                                   .subscribeOn(Schedulers.from(dbPoolSched)))
                               .flatMap(table ->
 
-                                  avroFns.optimizedQuery(table, targetSize)
-                                      .flatMap(many ->
-                                          avroFns.saveAvroFile(many, path)
+                                  avroFns.optimizedQuery(table, targetSize, path)
+                                      .flatMap(query ->
+                                          avroFns.saveAsAvro(query)
                                               .subscribeOn(Schedulers.from(dbPoolSched))
                                       )
                                       .switchIfEmpty(
-                                          avroFns.query(table, targetSize)
-                                              .flatMap(single ->
-                                                  avroFns.saveAvroFile(single, path)
+                                          avroFns.query(table, targetSize, path)
+                                              .flatMap(query ->
+                                                  avroFns.saveAsAvro(query)
                                                       .subscribeOn(Schedulers.from(dbPoolSched))
                                               )
                                       )

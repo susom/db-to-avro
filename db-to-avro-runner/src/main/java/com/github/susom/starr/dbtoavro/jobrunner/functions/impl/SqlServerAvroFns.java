@@ -35,45 +35,44 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   @Override
-  public Observable<AvroFile> saveAvroFile(final Query query, final String pathPattern) {
+  public Observable<AvroFile> saveAsAvro(final Query query) {
     return dbb.withConnectionAccess().transactRx(db -> {
       Table table = query.table;
-
-      String path = pathPattern
-          .replace("%{CATALOG}", table.catalog)
-          .replace("%{SCHEMA}", table.schema)
-          .replace("%{TABLE}", table.name);
-
-      if (query.divisor == 0) {
-        path = path.replace("-%{PART}", "");
-      }
-
-      LOGGER.info("Writing {}", path);
 
       String startTime = DateTime.now().toString();
       db.get().underlyingConnection().setCatalog(table.catalog);
 
-      Etl.saveQuery(
-          db.get().toSelect(query.sql))
-          .asAvro(path, table.schema, table.name)
-          .withCodec(CodecFactory.snappyCodec())
-          .withCodec(codec)
-          .fetchSize(fetchSize)
-          .rowsPerFile(query.divisor)
-          .start();
-      // Todo: this needs to return the paths of *all* avro files created by ETL.saveQuery()
       List<String> paths = new ArrayList<>();
-      paths.add(path);
+      if (query.rowsPerFile > 0) {
+        LOGGER.info("Writing {}", query.path);
+        paths.addAll(Etl.saveQuery(
+            db.get().toSelect(query.sql))
+            .asAvro(query.path, table.schema, table.name)
+            .withCodec(CodecFactory.snappyCodec())
+            .withCodec(codec)
+            .fetchSize(fetchSize)
+            .start(query.rowsPerFile));
+      } else {
+        LOGGER.info("Writing {}", query.path);
+        Etl.saveQuery(
+            db.get().toSelect(query.sql))
+            .asAvro(query.path, table.schema, table.name)
+            .withCodec(CodecFactory.snappyCodec())
+            .withCodec(codec)
+            .fetchSize(fetchSize)
+            .start();
+        paths.add(query.path);
+      }
 
       String endTime = DateTime.now().toString();
 
-      return new AvroFile(query, paths, startTime, endTime, new File(path).length());
+      return new AvroFile(query, paths, startTime, endTime, new File(query.path).length());
 
     }).toObservable();
   }
 
   @Override
-  public Observable<Query> query(final Table table, final long targetSize) {
+  public Observable<Query> query(final Table table, final long targetSize, final String pathPattern) {
 
     // Only dump the supported column types
     String columns = table.columns.stream()
@@ -85,12 +84,26 @@ public class SqlServerAvroFns implements AvroFns {
         .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", columns, table.schema,
             table.name);
 
+    String path;
+
     long rowsPerFile = 0;
     if (targetSize > 0 && table.bytes > 0 && table.rows > 0 && table.bytes > targetSize) {
+      path = pathPattern
+          .replace("%{CATALOG}", table.catalog)
+          .replace("%{SCHEMA}", table.schema)
+          .replace("%{TABLE}", table.name); // %{PART} is handled by downstream ETL
       rowsPerFile = (targetSize) / (table.bytes / table.rows);
+    } else {
+      path = pathPattern
+          .replace("%{CATALOG}", table.catalog)
+          .replace("%{SCHEMA}", table.schema)
+          .replace("%{TABLE}", table.name)
+          .replace("-%{PART}", "");
+
     }
 
-    return Observable.just(new Query(table, sql, rowsPerFile));
+    return Observable.just(new Query(table, sql, rowsPerFile, path));
+
   }
 
 
@@ -101,7 +114,7 @@ public class SqlServerAvroFns implements AvroFns {
    * <p>If the table cannot be split, a single partition is emitted.</p>
    */
   @Override
-  public Observable<Query> optimizedQuery(final Table table, final long targetSize) {
+  public Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern) {
 
     // Check if table doesn't meet partitioning criteria, if not, bail.
     if (!optimized || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize || targetSize == 0 ||
@@ -143,8 +156,13 @@ public class SqlServerAvroFns implements AvroFns {
                     + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
                 primaryKeys, table.name, offset, partitionSize, joinKeys, columns);
 
-        emitter.onNext(
-            new Query(table, sql, partitionSize, part++));
+        String path = pathPattern
+            .replace("%{CATALOG}", table.catalog)
+            .replace("%{SCHEMA}", table.schema)
+            .replace("%{TABLE}", table.name)
+            .replace("%{PART}", String.format("%03d", part++));
+
+        emitter.onNext(new Query(table, sql, 0, path));
 
         offset += partitionSize;
       } while (offset < table.rows);

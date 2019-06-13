@@ -8,13 +8,12 @@ import io.reactivex.Observable;
 public interface AvroFns {
 
   /**
-   * Saves an AvroFile instance to disk
+   * Runs a query and saves as Avro
    *
-   * @param query SQL query to pass to Avro export
-   * @param pathPattern a pattern for naming the Avro output. Supports %{CATALOG}, %{SCHEMA}, %{TABLE}, %{PART}
+   * @param query query to export as Avro
    * @return saved AvroFile instances
    */
-  Observable<AvroFile> saveAvroFile(Query query, String pathPattern);
+  Observable<AvroFile> saveAsAvro(Query query);
 
   /**
    * Constructs a query optimized for splitting a very large table into multiple avro files. If the table does not meet
@@ -23,9 +22,10 @@ public interface AvroFns {
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
    * considerably.
+   * @param pathPattern filename pattern for query output
    * @return unsaved AvroFile instances
    */
-  Observable<Query> optimizedQuery(final Table table, final long targetSize);
+  Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern);
 
   /**
    * Constructs a simple query for exporting a table using a single SQL query. (eg. SELECT * FROM ...)
@@ -33,8 +33,9 @@ public interface AvroFns {
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
    * considerably.
+   * @param pathPattern filename pattern for query output
    * @return unsaved AvroFile instances
    */
-  Observable<Query> query(final Table table, final long targetSize);
+  Observable<Query> query(final Table table, final long targetSize, final String pathPattern);
 
 }
