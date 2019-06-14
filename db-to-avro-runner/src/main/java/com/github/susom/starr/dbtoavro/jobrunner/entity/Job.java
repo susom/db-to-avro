@@ -37,6 +37,7 @@ public class Job {
   public final Flavor flavor;
   public final String destination;
   public final String connection;
+  public final String timezone;
 
   // Job output
   public List<AvroFile> avro;
@@ -53,6 +54,7 @@ public class Job {
     this.flavor = builder.flavor;
     this.destination = builder.destination;
     this.connection = builder.connection;
+    this.timezone = builder.timezone;
   }
 
   public static class Builder {
@@ -68,6 +70,7 @@ public class Job {
     private Flavor flavor;
     private String destination;
     private String connection;
+    private String timezone;
 
     public Builder() {
     }
@@ -128,6 +131,10 @@ public class Job {
 
     public Builder connection(String connection) {
       this.connection = connection;
+      return this;
+    }
+    public Builder timezone(String timezone) {
+      this.timezone = timezone;
       return this;
     }
 

@@ -133,6 +133,7 @@ public class Main {
           .preSql(optionSet.valueOf(preSql))
           .postSql(optionSet.valueOf(postSql))
           .connection(optionSet.valueOf(connection))
+          .timezone(System.getProperty("user.timezone"))
           .build();
 
       Config config = readConfig();
