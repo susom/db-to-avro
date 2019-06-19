@@ -19,6 +19,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.entity;
 
 import com.github.susom.database.Flavor;
+import java.io.File;
 import java.util.List;
 
 /**
@@ -32,12 +33,15 @@ public class Job {
   public final String catalog;
   public final List<String> schemas;
   public final List<String> tables;
-  public final String postSql;
-  public final String preSql;
+  public final File postSql;
+  public final File preSql;
   public final Flavor flavor;
   public final String destination;
   public final String connection;
   public final String timezone;
+
+  // Oracle specific options
+  public final String parFile;
 
   // Job output
   public List<AvroFile> avro;
@@ -55,6 +59,7 @@ public class Job {
     this.destination = builder.destination;
     this.connection = builder.connection;
     this.timezone = builder.timezone;
+    this.parFile = builder.parFile;
   }
 
   public static class Builder {
@@ -65,12 +70,13 @@ public class Job {
     private String catalog;
     private List<String> schemas;
     private List<String> tables;
-    private String postSql;
-    private String preSql;
+    private File postSql;
+    private File preSql;
     private Flavor flavor;
     private String destination;
     private String connection;
     private String timezone;
+    private String parFile;
 
     public Builder() {
     }
@@ -109,12 +115,12 @@ public class Job {
       return this;
     }
 
-    public Builder postSql(String postSql) {
+    public Builder postSql(File postSql) {
       this.postSql = postSql;
       return this;
     }
 
-    public Builder preSql(String preSql) {
+    public Builder preSql(File preSql) {
       this.preSql = preSql;
       return this;
     }
@@ -133,8 +139,13 @@ public class Job {
       this.connection = connection;
       return this;
     }
+
     public Builder timezone(String timezone) {
       this.timezone = timezone;
+      return this;
+    }
+    public Builder parFile(String parFile) {
+      this.parFile = parFile;
       return this;
     }
 

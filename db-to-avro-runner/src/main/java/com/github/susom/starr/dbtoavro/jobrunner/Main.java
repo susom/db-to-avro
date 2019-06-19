@@ -25,6 +25,7 @@ import com.github.susom.database.ConfigFrom;
 import com.github.susom.database.Flavor;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job.Builder;
+import io.reactivex.exceptions.Exceptions;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -88,7 +89,7 @@ public class Main {
         .ofType(String.class)
         .withValuesSeparatedBy(',');
     OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
-    OptionSpec<String> catalog = parser.accepts("catalog", "catalog to export").withRequiredArg().required();
+    OptionSpec<String> catalog = parser.accepts("catalog", "catalog/package to export").withRequiredArg();
     OptionSpec<String> schemas = parser.accepts("schemas", "only export this comma-delimited list of schemas")
         .withRequiredArg()
         .ofType(String.class)
@@ -97,9 +98,15 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
-    OptionSpec<String> preSql = parser.accepts("pre-sql", "sql to execute before restore/connect").withRequiredArg();
-    OptionSpec<String> postSql = parser.accepts("post-sql", "sql to execute after restore/connect").withRequiredArg();
+    OptionSpec<File> preSql = parser.accepts("pre-sql", "path of sql file to execute before restore/connect")
+        .withRequiredArg().ofType(File.class);
+    OptionSpec<File> postSql = parser.accepts("post-sql", "path of sql file to execute after restore/connect")
+        .withRequiredArg().ofType(File.class);
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
+
+    // Oracle specific options
+    OptionSpec<String> parFile = parser.accepts("parfile", "Name of impdp .par file in backup directory")
+        .withRequiredArg();
 
     // TODO:
     //  switches for deleting docker container after successful export
@@ -116,10 +123,23 @@ public class Main {
         exit(0);
       }
 
+      // Other sanity checks
+      if (optionSet.valueOf(flavor).equals(Flavor.oracle) && !optionSet.has(parFile)) {
+        System.err.println("--parfile is required for Oracle datapump restore");
+        parser.printHelpOn(System.out);
+        exit(0);
+      }
+
+      if (!optionSet.valueOf(flavor).equals(Flavor.oracle) && !optionSet.has(catalog)) {
+        System.err.println("--catalog is required for non-oracle databases");
+        parser.printHelpOn(System.out);
+        exit(0);
+      }
+
       final Job job = new Builder()
           .id(0L)
           .flavor(optionSet.valueOf(flavor))
-          .catalog(optionSet.valueOf(catalog))
+          .catalog(optionSet.valueOf(flavor).equals(Flavor.oracle) && optionSet.valueOf(catalog) == null ? "%" : optionSet.valueOf(catalog))
           .schemas(optionSet.valuesOf(schemas))
           .tables(optionSet.valuesOf(tables))
           .backupDir(optionSet.valueOf(backupDir))
@@ -134,6 +154,7 @@ public class Main {
           .postSql(optionSet.valueOf(postSql))
           .connection(optionSet.valueOf(connection))
           .timezone(System.getProperty("user.timezone"))
+          .parFile(optionSet.valueOf(parFile))
           .build();
 
       Config config = readConfig();
@@ -184,10 +205,22 @@ public class Main {
     String properties = System.getProperty("properties",
         "conf/app.properties" + File.pathSeparator + "local.properties" + File.pathSeparator + "sample.properties");
 
-    Config subs = ConfigFrom.firstOf().value("UUID", UUID.randomUUID().toString()).get();
-
+    String uuid = UUID.randomUUID().toString();
+    Config subs = ConfigFrom.firstOf().value("UUID", uuid.substring(0, 18)).get();
     LOGGER.debug("UUID: {}", subs.getString("UUID"));
-    return Config.from().systemProperties().propertyFile(properties.split(File.pathSeparator))
+
+    // Create a tempdir we can map into the running container
+    String temp = "/tmp";
+    try {
+      temp = Files.createTempDirectory("db-to-avro").toAbsolutePath().toString();
+    } catch (IOException ex) {
+      Exceptions.propagate(ex);
+    }
+    LOGGER.debug("Host temporary directory is {}", temp);
+
+    return Config.from()
+        .value("host.tempdir", temp)
+        .systemProperties().propertyFile(properties.split(File.pathSeparator))
         .substitutions(subs).get();
   }
 

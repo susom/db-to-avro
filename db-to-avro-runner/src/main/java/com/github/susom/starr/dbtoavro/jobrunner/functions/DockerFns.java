@@ -25,10 +25,13 @@ import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.exceptions.Exceptions;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 
 /**
- * Manages an SQL server container that is running in docker
+ * Manages an database container that is running in docker
  */
 public abstract class DockerFns {
 
@@ -42,14 +45,14 @@ public abstract class DockerFns {
   }
 
   /**
-   * Creates an SQL server instance running in docker
+   * Creates a database instance running in docker
    *
    * @return containerId of running container
    */
-  public Single<String> create(List<String> mounts) {
+  public Single<String> create(List<String> mounts, List<String> ports) {
     return Single.create(emitter -> {
       try {
-        emitter.onSuccess(dockerService.createContainer(getImage(), mounts, env));
+        emitter.onSuccess(dockerService.createContainer(getImage(), mounts, env, ports));
       } catch (Exception ex) {
         Exceptions.propagate(ex);
       }
@@ -57,9 +60,9 @@ public abstract class DockerFns {
   }
 
   /**
-   * Starts an SQL container
+   * Starts a database container
    *
-   * @param containerId containerId where SQL server is running
+   * @param containerId containerId where database is running
    * @return completable
    */
   public Completable start(final String containerId) {
@@ -74,7 +77,7 @@ public abstract class DockerFns {
   }
 
   /**
-   * Stops an SQL container
+   * Stops the database container
    *
    * @param containerId containerId where SQL server is running
    * @return completable
@@ -91,7 +94,7 @@ public abstract class DockerFns {
   }
 
   /**
-   * Deletes an SQL server container
+   * Deletes a database container
    *
    * @param containerId containerId to delete
    * @return completable
@@ -107,6 +110,18 @@ public abstract class DockerFns {
     });
   }
 
+
+  /**
+   * Execute a program within a container
+   *
+   * @param containerId container ID
+   * @param cmd program and parameters
+   * @return observable of program output
+   */
+  public Observable<ConsoleOutput> exec(final String containerId, final String... cmd) {
+    return dockerService.exec(containerId, cmd);
+  }
+
   /**
    * Executes an SQL statement by calling the native command-line utility inside the docker container. Used for database
    * restores.
@@ -118,7 +133,28 @@ public abstract class DockerFns {
   abstract public Observable<ConsoleOutput> execSqlShell(final String containerId, final String query);
 
   /**
-   * Returns a successful completable if the SQL server is up and running
+   * Executes an SQL file by calling the native command-line utility inside the docker container. Used for database
+   * restores.
+   *
+   * @param containerId containerId where SQL server is running
+   * @param inputFile SQL file to execute
+   * @return an observable with the console output of sqlcmd
+   */
+  public Observable<ConsoleOutput> execSqlShell(final String containerId, File inputFile) {
+    if (inputFile == null) {
+      return Observable.empty();
+    }
+    String contents = null;
+    try {
+      contents = new String(Files.readAllBytes(inputFile.toPath()));
+    } catch (IOException ex) {
+      Exceptions.propagate(ex);
+    }
+    return execSqlShell(containerId, contents);
+  }
+
+  /**
+   * Returns a successful completable if the database container is up and running
    *
    * @param containerId containerId where SQL server is running
    * @return completable, complete if SQL server is up and running

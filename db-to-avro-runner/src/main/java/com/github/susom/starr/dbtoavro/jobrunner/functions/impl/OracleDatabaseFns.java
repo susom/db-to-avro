@@ -23,14 +23,10 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx.Builder;
-import io.reactivex.Completable;
-import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
-import java.sql.CallableStatement;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,10 +37,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Sql-server specific SQL statements, for various database tasks
  */
-public class SqlServerDatabaseFns extends DatabaseFns {
+public class OracleDatabaseFns extends DatabaseFns {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
-
+  private static final Logger LOGGER = LoggerFactory.getLogger(OracleDatabaseFns.class);
   private static int[] serializable = {
       Types.BIGINT,
       Types.BINARY,
@@ -61,37 +56,22 @@ public class SqlServerDatabaseFns extends DatabaseFns {
       Types.SMALLINT,
       Types.TINYINT,
       Types.TIMESTAMP,
-//      Types.VARBINARY, // This is SpatialLocation in MSSQL
+      Types.VARBINARY,
       Types.VARCHAR
   };
 
-  public SqlServerDatabaseFns(Config config, Builder dbb) {
+  public OracleDatabaseFns(Config config, Builder dbb) {
     super(config, dbb);
   }
 
-  @Override
-  public Completable transact(String sql) {
-    if (sql == null) {
-      return Completable.complete();
-    }
-    return dbb.transactRx(db -> {
-      db.get().ddl(sql).execute();
-    });
-  }
-
+  /**
+   * Oracle does not have catalogs
+   * @param database database to query
+   * @return empty observable
+   */
   @Override
   public Observable<String> getCatalogs(Database database) {
-    return
-        dbb.withConnectionAccess().transactRx(db -> {
-          DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-          try (ResultSet catalogs = metadata.getCatalogs()) {
-            List<String> catalogsList = new ArrayList<>();
-            while (catalogs.next()) {
-              catalogsList.add(catalogs.getString(1));
-            }
-            return catalogsList;
-          }
-        }).toObservable().flatMapIterable(l -> l);
+    return Observable.just("%");
   }
 
   @Override
@@ -135,30 +115,13 @@ public class SqlServerDatabaseFns extends DatabaseFns {
         }
       }
 
-      // Size of table in bytes
-      long bytes = 0;
-      try (CallableStatement spaceUsed = db.get().underlyingConnection()
-          .prepareCall("{call sp_spaceused(?)}")) {
-        spaceUsed.setString(1, schema + "." + table);
-        if (spaceUsed.execute()) {
-          try (ResultSet rs = spaceUsed.getResultSet()) {
-            while (rs.next()) {
-              bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
-            }
-          }
-        }
-      } catch (SQLException ignored) {
-      }
+      // Number of rows
+      long bytes = db.get().toSelect("SELECT BYTES FROM DBA_SEGMENTS WHERE SEGMENT_TYPE='TABLE' AND SEGMENT_NAME = ?")
+          .argString(table)
+          .queryLongOrZero();
 
       // Number of rows
-      long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-          + "FROM sys.objects OBJECTS\n"
-          + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-          + "WHERE OBJECTS.type = 'U'\n"
-          + "  AND PARTITIONS.index_id < 2\n"
-          + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-          + "  AND OBJECTS.Name = ?")
-          .argString(schema)
+      long rows = db.get().toSelect("SELECT NUM_ROWS FROM ALL_TABLES WHERE TABLE_NAME = ?")
           .argString(table)
           .queryLongOrZero();
 

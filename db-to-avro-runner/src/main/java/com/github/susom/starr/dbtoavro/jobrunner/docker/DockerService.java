@@ -18,6 +18,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.docker;
 
 import io.reactivex.Observable;
+import java.io.File;
 import java.util.List;
 
 public interface DockerService {
@@ -25,11 +26,12 @@ public interface DockerService {
   /**
    * Creates (but does not start) a docker container
    * @param image docker image to create container from
-   * @param mounts paths to mount to docker container in form /source:/dest
+   * @param mounts paths to mount to docker container in form /source:/dest,...
    * @param env environment variables to pass to docker container, comma delimited key=value pairs
+   * @param ports to open to container, in the form port:port,...
    * @return the containerId of the new container
    */
-  String createContainer(String image, List<String> mounts, List<String> env);
+  String createContainer(String image, List<String> mounts, List<String> env, List<String> ports);
 
   /**
    * Starts a container with the given containerId
@@ -62,6 +64,13 @@ public interface DockerService {
    * @return observable of notify output
    */
   Observable<ConsoleOutput> logs(String containerId, boolean follow, int numberOfLines);
+
+  /**
+   * Creates a file inside a given container ID with contents
+   * @param contents string contents for file
+   * @param filename filename for file
+   */
+  void createFileFromString(String containerId, String filename, String contents);
 
 }
 

@@ -49,10 +49,6 @@ public class AvroExporter implements Exporter {
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
           DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
 
-          if (avroFns == null || dbFns == null) {
-            return Observable.error(new Exception("Unsupported database flavor!"));
-          }
-
           return dbFns.getCatalogs(database)
               .filter(job.catalog::equals) // filter out unwanted databases
               .flatMap(catalog ->

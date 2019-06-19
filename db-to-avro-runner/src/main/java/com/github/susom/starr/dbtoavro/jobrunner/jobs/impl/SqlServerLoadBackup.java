@@ -23,7 +23,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
@@ -31,6 +30,7 @@ import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import org.slf4j.Logger;
@@ -59,16 +59,17 @@ public class SqlServerLoadBackup implements Loader {
 
     // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
-    mounts.add(new File(job.backupDir) + ":/backup");
+    mounts.add(new File(job.backupDir) + ":"+config.getString("container.backupdir", "/backup"));
+    List<String> ports = Arrays.asList(config.getString("sqlserver.ports", "1433:1433").split("\\s*,\\s*"));
 
     docker = FnFactory.getDockerFns(job.flavor, config);
 
-    return docker.create(mounts).flatMap(containerId ->
+    return docker.create(mounts, ports).flatMap(containerId ->
         docker.start(containerId)
             .doOnComplete(() -> LOGGER
                 .info(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
             .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(3, 2000)))
-            .andThen(db.transact(job.preSql))
+            .andThen(db.transactFile(job.preSql))
             .doOnComplete(() -> LOGGER.info("Database pre-sql completed"))
             .doOnComplete(() -> LOGGER.info("Starting database restore"))
             .andThen(db.getRestoreSql(job.catalog, job.backupFiles)
@@ -78,7 +79,7 @@ public class SqlServerLoadBackup implements Loader {
                 .doOnNext(p -> LOGGER.info(p.getData()))
                 .ignoreElements()
                 .doOnComplete(() -> LOGGER.info("Restore completed"))
-                .andThen(db.transact(job.postSql))
+                .andThen(db.transactFile(job.postSql))
                 .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
                 .andThen(db.getDatabase(containerId))
                 .doFinally(() -> LOGGER.info("Database introspection complete"))

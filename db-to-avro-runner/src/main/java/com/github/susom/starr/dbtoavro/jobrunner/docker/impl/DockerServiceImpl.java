@@ -31,15 +31,22 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
+import com.github.dockerjava.core.util.CompressArchiveUtil;
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
+import io.reactivex.exceptions.Exceptions;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import javax.ws.rs.ProcessingException;
 import org.slf4j.Logger;
@@ -67,7 +74,8 @@ public class DockerServiceImpl implements DockerService {
   }
 
   @Override
-  public String createContainer(final String image, final List<String> mounts, final List<String> env) {
+  public String createContainer(final String image, final List<String> mounts, final List<String> env,
+      final List<String> ports) {
     // Uses same '/host_path:/container_path' syntax as command line docker
     Volume[] volumes = new Volume[mounts.size()];
     Bind[] binds = new Bind[mounts.size()];
@@ -77,9 +85,11 @@ public class DockerServiceImpl implements DockerService {
       binds[i] = new Bind(mounts.get(i).split(":")[0], volumes[i]);
     }
 
-    ExposedPort tcp1433 = ExposedPort.tcp(1433);
     Ports portBindings = new Ports();
-    portBindings.bind(tcp1433, Ports.Binding.bindPort(1433));
+    ports.forEach(port -> portBindings.bind(
+        ExposedPort.tcp(Integer.valueOf(port.split(":")[0])),
+        Ports.Binding.bindPort(Integer.valueOf(port.split(":")[1])))
+    );
 
     return
         dockerClient
@@ -87,8 +97,10 @@ public class DockerServiceImpl implements DockerService {
             .withVolumes(volumes)
             .withEnv(env.toArray(new String[0]))
             .withHostConfig(new HostConfig().withBinds(binds).withPortBindings(portBindings))
+            .withLabels(new HashMap<String, String>() {{
+              put("creator", "db-to-avro");
+            }})
             .exec().getId();
-
   }
 
   @Override
@@ -140,6 +152,25 @@ public class DockerServiceImpl implements DockerService {
           .awaitCompletion();
       emitter.onComplete();
     });
+  }
+
+  @Override
+  public void createFileFromString(String containerId, String filename, String contents) {
+    try {
+      Path tempFile = Files.createTempDirectory(null).resolve(filename);
+      try (PrintWriter out = new PrintWriter(tempFile.toFile())) {
+        out.println(contents);
+      }
+      Path outputTarFile = Files.createTempFile(null, null);
+      CompressArchiveUtil.tar(tempFile, outputTarFile, true, false);
+      try (InputStream uploadStream = Files.newInputStream(outputTarFile)) {
+        dockerClient.copyArchiveToContainerCmd(containerId)
+            .withTarInputStream(uploadStream)
+            .exec();
+      }
+    } catch (IOException ex) {
+      Exceptions.propagate(ex);
+    }
   }
 
   private StringBuilder getBuffer(final StreamType streamType) throws IOException {

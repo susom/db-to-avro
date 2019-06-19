@@ -21,6 +21,8 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExporter;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.OracleLoadDataPump;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.OracleLoadExisting;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
@@ -70,6 +72,13 @@ public class JobRunner {
           loader = new SqlServerLoadExisting(config, dbb);
         }
         break;
+      case oracle:
+        if (job.connection == null) {
+          loader = new OracleLoadDataPump(config, dbb);
+        } else {
+          loader = new OracleLoadExisting(config, dbb);
+        }
+        break;
       default:
         return Completable.error(new IllegalArgumentException("Unimplemented database " + job.flavor));
     }
@@ -88,7 +97,7 @@ public class JobRunner {
           .ignoreElement();
     } else {
       LOGGER.info("No destination, not exporting avro");
-      return Completable.complete();
+      return loader.run(job).ignoreElement();
     }
 
   }

@@ -17,21 +17,31 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
+import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
+import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
+import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
+import java.io.File;
+import java.util.List;
+import java.util.Scanner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public interface DatabaseFns {
+public abstract class DatabaseFns {
 
-  /**
-   * Run arbitrary SQL without a return value
-   *
-   * @param sql SQL code
-   * @return Success of transaction
-   */
-  Completable transact(String sql);
+  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseFns.class);
+
+  protected final Config config;
+  protected final DatabaseProviderRx.Builder dbb;
+
+  public DatabaseFns(Config config, DatabaseProviderRx.Builder dbb) {
+    this.config = config;
+    this.dbb = dbb;
+  }
 
   /**
    * Pointer to a database running in a docker container
@@ -39,7 +49,7 @@ public interface DatabaseFns {
    * @param containerId running database
    * @return database object
    */
-  Single<Database> getDatabase(String containerId);
+  abstract public Single<Database> getDatabase(String containerId);
 
   /**
    * Get catalogs in database
@@ -47,7 +57,7 @@ public interface DatabaseFns {
    * @param database database to query
    * @return observable of catalogs
    */
-  Observable<String> getCatalogs(Database database);
+  abstract public Observable<String> getCatalogs(Database database);
 
   /**
    * Get schemas in catalog
@@ -55,7 +65,7 @@ public interface DatabaseFns {
    * @param catalog catalog to query
    * @return observable of schemas
    */
-  Observable<String> getSchemas(String catalog);
+  abstract public Observable<String> getSchemas(String catalog);
 
   /**
    * Get tables in a schema
@@ -64,7 +74,7 @@ public interface DatabaseFns {
    * @param schema schema to query
    * @return observable of catalogs
    */
-  Observable<String> getTables(String catalog, String schema);
+  abstract public Observable<String> getTables(String catalog, String schema);
 
   /**
    * Introspects a database table, required for selecting the appropriate splitting and exporting method.
@@ -74,6 +84,40 @@ public interface DatabaseFns {
    * @param table table to introspect
    * @return observable of table with row counts, byte sizes, and supported column information
    */
-  Observable<Table> introspect(String catalog, String schema, String table);
+  abstract public Observable<Table> introspect(String catalog, String schema, String table);
+
+  abstract public Single<String> getRestoreSql(String catalog, List<String> backupFiles);
+
+  /**
+   * Executes contents of an SQL file
+   *
+   * @param file path to SQL file
+   * @return completable status
+   */
+  public Completable transactFile(File file) {
+    if (file == null) return Completable.complete();
+    return dbb.transactRx(db -> {
+      Scanner scanner = new Scanner(file).useDelimiter(";");
+      while (scanner.hasNext()) {
+        String statement = scanner.next() + ";";
+        LOGGER.debug("Pre-SQL: {}", statement);
+        db.get().ddl(statement).execute();
+      }
+    });
+  }
+
+  /**
+   * Executes an SQL string
+   *
+   * @return completable status
+   */
+  public Completable transact(String sql) {
+    if (sql == null) {
+      return Completable.complete();
+    }
+    return dbb.transactRx(db -> {
+      db.get().ddl(sql).execute();
+    });
+  }
 
 }
