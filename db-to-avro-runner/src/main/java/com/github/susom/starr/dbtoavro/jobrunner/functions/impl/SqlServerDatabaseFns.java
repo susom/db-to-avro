@@ -24,7 +24,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx.Builder;
 import io.reactivex.Completable;
-import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.sql.CallableStatement;
@@ -77,21 +76,6 @@ public class SqlServerDatabaseFns extends DatabaseFns {
     return dbb.transactRx(db -> {
       db.get().ddl(sql).execute();
     });
-  }
-
-  @Override
-  public Observable<String> getCatalogs(Database database) {
-    return
-        dbb.withConnectionAccess().transactRx(db -> {
-          DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-          try (ResultSet catalogs = metadata.getCatalogs()) {
-            List<String> catalogsList = new ArrayList<>();
-            while (catalogs.next()) {
-              catalogsList.add(catalogs.getString(1));
-            }
-            return catalogsList;
-          }
-        }).toObservable().flatMapIterable(l -> l);
   }
 
   @Override

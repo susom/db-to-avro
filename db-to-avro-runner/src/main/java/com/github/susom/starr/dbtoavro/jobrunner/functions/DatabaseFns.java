@@ -52,14 +52,6 @@ public abstract class DatabaseFns {
   abstract public Single<Database> getDatabase(String containerId);
 
   /**
-   * Get catalogs in database
-   *
-   * @param database database to query
-   * @return observable of catalogs
-   */
-  abstract public Observable<String> getCatalogs(Database database);
-
-  /**
    * Get schemas in catalog
    *
    * @param catalog catalog to query

@@ -41,7 +41,6 @@ public class OracleAvroFns implements AvroFns {
     return dbb.withConnectionAccess().transactRx(db -> {
 
       String startTime = DateTime.now().toString();
-      db.get().underlyingConnection().setCatalog(query.table.catalog);
 
       List<String> paths = new ArrayList<>();
       if (query.rowsPerFile > 0) {
@@ -92,13 +91,13 @@ public class OracleAvroFns implements AvroFns {
     long rowsPerFile = 0;
     if (targetSize > 0 && table.bytes > 0 && table.rows > 0 && table.bytes > targetSize) {
       path = pathPattern
-          .replace("%{CATALOG}", tidy(table.catalog))
+          .replace("%{CATALOG}", "ANY")
           .replace("%{SCHEMA}", tidy(table.schema))
           .replace("%{TABLE}", tidy(table.name));
       rowsPerFile = (targetSize) / (table.bytes / table.rows);
     } else {
       path = pathPattern
-          .replace("%{CATALOG}", tidy(table.catalog))
+          .replace("%{CATALOG}", "ANY")
           .replace("%{SCHEMA}", tidy(table.schema))
           .replace("%{TABLE}", tidy(table.name))
           .replace("-%{PART}", "");
@@ -160,7 +159,7 @@ public class OracleAvroFns implements AvroFns {
                 primaryKeys, table.name, offset, partitionSize, joinKeys, columns);
 
         String path = pathPattern
-            .replace("%{CATALOG}", tidy(table.catalog))
+            .replace("%{CATALOG}", "ANY")
             .replace("%{SCHEMA}", tidy(table.schema))
             .replace("%{TABLE}", tidy(table.name))
             .replace("%{PART}", String.format("%03d", part++));

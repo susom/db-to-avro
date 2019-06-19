@@ -30,6 +30,7 @@ import java.sql.ResultSet;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,21 +65,11 @@ public class OracleDatabaseFns extends DatabaseFns {
     super(config, dbb);
   }
 
-  /**
-   * Oracle does not have catalogs
-   * @param database database to query
-   * @return empty observable
-   */
-  @Override
-  public Observable<String> getCatalogs(Database database) {
-    return Observable.just("%");
-  }
-
   @Override
   public Observable<String> getSchemas(String catalog) {
     return dbb.withConnectionAccess().transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-      try (ResultSet schemas = metadata.getSchemas(catalog, null)) {
+      try (ResultSet schemas = metadata.getSchemas(null, null)) {
         List<String> schemasList = new ArrayList<>();
         while (schemas.next()) {
           schemasList.add(schemas.getString(1));
@@ -92,7 +83,6 @@ public class OracleDatabaseFns extends DatabaseFns {
   public Observable<Table> introspect(String catalog, String schema, String table) {
     return dbb.withConnectionAccess().transactRx(db -> {
       LOGGER.info("Introspecting table {}", table);
-      db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
 
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
@@ -115,25 +105,34 @@ public class OracleDatabaseFns extends DatabaseFns {
         }
       }
 
-      // Number of rows
+      // Number of bytes
       long bytes = db.get().toSelect("SELECT BYTES FROM DBA_SEGMENTS WHERE SEGMENT_TYPE='TABLE' AND SEGMENT_NAME = ?")
           .argString(table)
           .queryLongOrZero();
 
+      // Oracle defaults to an insane amount of threads killing the app
+      int cores = Runtime.getRuntime().availableProcessors();
+
       // Number of rows
-      long rows = db.get().toSelect("SELECT NUM_ROWS FROM ALL_TABLES WHERE TABLE_NAME = ?")
-          .argString(table)
-          .queryLongOrZero();
+      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
+      long rows = db.get().toSelect(sql).queryLongOrZero();
 
       return new Table(catalog, schema, table, cols, bytes, rows);
 
     }).toObservable();
   }
 
+  /**
+   * Not used in Oracle
+   */
+  @Override
+  public Single<String> getRestoreSql(String catalog, List<String> backupFiles) {
+    return null;
+  }
+
   @Override
   public Observable<String> getTables(String catalog, String schema) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
@@ -153,77 +152,6 @@ public class OracleDatabaseFns extends DatabaseFns {
       database.flavor = db.get().flavor();
       return database;
     }).toSingle();
-  }
-
-  /**
-   * SQL-server specific function to create the database restore ddl
-   *
-   * @param catalog catalog to restore
-   * @param backupFiles list of backup files in restore
-   * @return SQL that when executed starts a restore
-   */
-  public Single<String> getRestoreSql(String catalog, List<String> backupFiles) {
-    return
-        dbb.transactRx(db -> {
-          db.get().ddl("DROP TABLE IF EXISTS FileListHeaders").execute();
-          db.get().ddl("CREATE TABLE FileListHeaders (\n"
-              + "     LogicalName    nvarchar(128)\n"
-              + "    ,PhysicalName   nvarchar(260)\n"
-              + "    ,[Type] char(1)\n"
-              + "    ,FileGroupName  nvarchar(128) NULL\n"
-              + "    ,Size   numeric(20,0)\n"
-              + "    ,MaxSize    numeric(20,0)\n"
-              + "    ,FileID bigint\n"
-              + "    ,CreateLSN  numeric(25,0)\n"
-              + "    ,DropLSN    numeric(25,0) NULL\n"
-              + "    ,UniqueID   uniqueidentifier\n"
-              + "    ,ReadOnlyLSN    numeric(25,0) NULL\n"
-              + "    ,ReadWriteLSN   numeric(25,0) NULL\n"
-              + "    ,BackupSizeInBytes  bigint\n"
-              + "    ,SourceBlockSize    int\n"
-              + "    ,FileGroupID    int\n"
-              + "    ,LogGroupGUID   uniqueidentifier NULL\n"
-              + "    ,DifferentialBaseLSN    numeric(25,0) NULL\n"
-              + "    ,DifferentialBaseGUID   uniqueidentifier NULL\n"
-              + "    ,IsReadOnly bit\n"
-              + "    ,IsPresent  bit\n"
-              + ")").execute();
-          db.get().ddl(
-              "IF cast(cast(SERVERPROPERTY('ProductVersion') as char(4)) as float) > 9 -- Greater than SQL 2005\n"
-                  + "BEGIN\n"
-                  + "    ALTER TABLE FileListHeaders ADD TDEThumbprint varbinary(32) NULL\n"
-                  + "END").execute();
-          db.get().ddl(
-              "IF cast(cast(SERVERPROPERTY('ProductVersion') as char(2)) as float) > 12 -- Greater than 2014\n"
-                  + "BEGIN\n"
-                  + "    ALTER TABLE FileListHeaders ADD SnapshotURL nvarchar(360) NULL\n"
-                  + "END").execute();
-          StringBuilder sql = new StringBuilder(
-              "INSERT INTO FileListHeaders EXEC ('RESTORE FILELISTONLY FROM DISK=N''/backup/");
-          sql.append(String.join("'', DISK=N''/backup/", backupFiles)).append("''')");
-          db.get().ddl(sql.toString()).execute();
-        })
-            .andThen(
-                dbb.transactRx(db -> {
-                      return db.get().toSelect("SELECT LogicalName, PhysicalName FROM FileListHeaders")
-                          .queryMany(rs -> rs.getStringOrNull(1) + "|" + rs.getStringOrNull(2));
-                    }
-                ))
-            .flatMapSingle(files -> {
-              StringBuilder sql = new StringBuilder("RESTORE DATABASE ").append(catalog).append(" FROM ")
-                  .append("DISK=N'/backup/")
-                  .append(String.join("', DISK=N'/backup/", backupFiles))
-                  .append("' WITH ");
-              for (String logicalFile : files) {
-                String logicalName = logicalFile.split("\\|")[0];
-                String fileName = logicalFile.split("\\|")[1];
-                String file = fileName.substring(fileName.lastIndexOf('\\') + 1);
-                sql.append("MOVE N'").append(logicalName).append("' TO N'/var/opt/mssql/data/").append(file)
-                    .append("', ");
-              }
-              sql.append("FILE=1, REPLACE, STATS=1");
-              return Single.just(sql.toString());
-            });
   }
 
   private boolean isSerializable(int type) {

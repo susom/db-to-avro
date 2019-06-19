@@ -23,5 +23,4 @@ public class Table {
     this.rows = rows;
   }
 
-
 }

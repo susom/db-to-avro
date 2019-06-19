@@ -89,7 +89,7 @@ public class Main {
         .ofType(String.class)
         .withValuesSeparatedBy(',');
     OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
-    OptionSpec<String> catalog = parser.accepts("catalog", "catalog/package to export").withRequiredArg();
+    OptionSpec<String> catalog = parser.accepts("catalog", "catalog to export").withRequiredArg();
     OptionSpec<String> schemas = parser.accepts("schemas", "only export this comma-delimited list of schemas")
         .withRequiredArg()
         .ofType(String.class)
@@ -124,14 +124,10 @@ public class Main {
       }
 
       // Other sanity checks
-      if (optionSet.valueOf(flavor).equals(Flavor.oracle) && !optionSet.has(parFile)) {
+      if (optionSet.valueOf(flavor).equals(Flavor.oracle)
+          && !optionSet.has(parFile)
+          && !optionSet.has(connection)) {
         System.err.println("--parfile is required for Oracle datapump restore");
-        parser.printHelpOn(System.out);
-        exit(0);
-      }
-
-      if (!optionSet.valueOf(flavor).equals(Flavor.oracle) && !optionSet.has(catalog)) {
-        System.err.println("--catalog is required for non-oracle databases");
         parser.printHelpOn(System.out);
         exit(0);
       }
@@ -139,7 +135,7 @@ public class Main {
       final Job job = new Builder()
           .id(0L)
           .flavor(optionSet.valueOf(flavor))
-          .catalog(optionSet.valueOf(flavor).equals(Flavor.oracle) && optionSet.valueOf(catalog) == null ? "%" : optionSet.valueOf(catalog))
+          .catalog(optionSet.valueOf(catalog))
           .schemas(optionSet.valuesOf(schemas))
           .tables(optionSet.valuesOf(tables))
           .backupDir(optionSet.valueOf(backupDir))

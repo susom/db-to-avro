@@ -144,6 +144,7 @@ public class Job {
       this.timezone = timezone;
       return this;
     }
+
     public Builder parFile(String parFile) {
       this.parFile = parFile;
       return this;

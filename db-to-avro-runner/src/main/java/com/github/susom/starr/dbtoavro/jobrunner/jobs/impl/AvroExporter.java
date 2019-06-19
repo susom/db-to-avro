@@ -49,34 +49,29 @@ public class AvroExporter implements Exporter {
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
           DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
 
-          return dbFns.getCatalogs(database)
-              .filter(job.catalog::equals) // filter out unwanted databases
-              .flatMap(catalog ->
+          return dbFns.getSchemas(job.catalog)
+              .filter(job.schemas::contains) // filter out unwanted schemas
+              .flatMap(schema ->
 
-                  dbFns.getSchemas(catalog)
-                      .filter(job.schemas::contains) // filter out unwanted schemas
-                      .flatMap(schema ->
+                  dbFns.getTables(job.catalog, schema)
+                      .filter(name -> job.tables.isEmpty() || job.tables.contains(name))
+                      .flatMap(table -> dbFns.introspect(job.catalog, schema, table)
+                          .subscribeOn(Schedulers.from(dbPoolSched)))
+                      .flatMap(table ->
 
-                          dbFns.getTables(catalog, schema)
-                              .filter(name -> job.tables.isEmpty() || job.tables.contains(name))
-                              .flatMap(table -> dbFns.introspect(catalog, schema, table)
-                                  .subscribeOn(Schedulers.from(dbPoolSched)))
-                              .flatMap(table ->
-
-                                  avroFns.optimizedQuery(table, targetSize, path)
+                          avroFns.optimizedQuery(table, targetSize, path)
+                              .flatMap(query ->
+                                  avroFns.saveAsAvro(query)
+                                      .subscribeOn(Schedulers.from(dbPoolSched))
+                              )
+                              .switchIfEmpty(
+                                  avroFns.query(table, targetSize, path)
                                       .flatMap(query ->
                                           avroFns.saveAsAvro(query)
                                               .subscribeOn(Schedulers.from(dbPoolSched))
                                       )
-                                      .switchIfEmpty(
-                                          avroFns.query(table, targetSize, path)
-                                              .flatMap(query ->
-                                                  avroFns.saveAsAvro(query)
-                                                      .subscribeOn(Schedulers.from(dbPoolSched))
-                                              )
-                                      )
-
                               )
+
                       )
 
               );
