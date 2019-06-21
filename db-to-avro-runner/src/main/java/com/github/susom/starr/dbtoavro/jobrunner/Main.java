@@ -82,7 +82,7 @@ public class Main {
     OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore")
         .requiredUnless(connection)
         .withRequiredArg();
-    OptionSpec<String> backupFiles = parser.accepts("backup-files", "comma-delimited list of backup files")
+    OptionSpec<String> backupFiles = parser.accepts("backup-files", "comma-delimited list of backup files, or a single .par file")
         .requiredIf(backupDir)
         .availableUnless(connection)
         .withRequiredArg()
@@ -104,10 +104,6 @@ public class Main {
         .withRequiredArg().ofType(File.class);
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
-    // Oracle specific options
-    OptionSpec<String> parFile = parser.accepts("parfile", "Name of impdp .par file in backup directory")
-        .withRequiredArg();
-
     // TODO:
     //  switches for deleting docker container after successful export
     //  switches for listing catalogs, schemas, and tables
@@ -119,15 +115,6 @@ public class Main {
       OptionSet optionSet = parser.parse(args);
 
       if (optionSet.has(helpOption)) {
-        parser.printHelpOn(System.out);
-        exit(0);
-      }
-
-      // Other sanity checks
-      if (optionSet.valueOf(flavor).equals(Flavor.oracle)
-          && !optionSet.has(parFile)
-          && !optionSet.has(connection)) {
-        System.err.println("--parfile is required for Oracle datapump restore");
         parser.printHelpOn(System.out);
         exit(0);
       }
@@ -150,7 +137,6 @@ public class Main {
           .postSql(optionSet.valueOf(postSql))
           .connection(optionSet.valueOf(connection))
           .timezone(System.getProperty("user.timezone"))
-          .parFile(optionSet.valueOf(parFile))
           .build();
 
       Config config = readConfig();

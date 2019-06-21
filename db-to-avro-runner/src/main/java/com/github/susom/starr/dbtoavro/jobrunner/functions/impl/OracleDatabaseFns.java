@@ -48,6 +48,8 @@ public class OracleDatabaseFns extends DatabaseFns {
       Types.CHAR,
       Types.CLOB,
       Types.DOUBLE,
+      Types.DECIMAL,
+      Types.FLOAT,
       Types.INTEGER,
       Types.NCHAR,
       Types.NCLOB,
@@ -95,6 +97,7 @@ public class OracleDatabaseFns extends DatabaseFns {
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
           cols.add(new Column(colName, type, typeName, isSerializable(type)));
+          LOGGER.debug("Table {} Column {} Type {} ({}) Supported {}", table, colName, typeName, type, isSerializable(type));
         }
         // Get primary keys
         try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
@@ -114,10 +117,10 @@ public class OracleDatabaseFns extends DatabaseFns {
       int cores = Runtime.getRuntime().availableProcessors();
 
       // Number of rows
-      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
-      long rows = db.get().toSelect(sql).queryLongOrZero();
+//      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
+//      long rows = db.get().toSelect(sql).queryLongOrZero();
 
-      return new Table(catalog, schema, table, cols, bytes, rows);
+      return new Table(catalog, schema, table, cols, bytes, 0);
 
     }).toObservable();
   }
@@ -137,9 +140,14 @@ public class OracleDatabaseFns extends DatabaseFns {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
         List<String> tablesList = new ArrayList<>();
+        int counter = 0;
         while (tables.next()) {
           tablesList.add(tables.getString(3));
+          if (++counter % 100 == 0) {
+            LOGGER.debug("{} tables read...", counter);
+          }
         }
+        LOGGER.debug("{} tables read...", counter);
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);

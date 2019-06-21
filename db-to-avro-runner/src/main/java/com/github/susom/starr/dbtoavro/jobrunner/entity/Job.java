@@ -40,9 +40,6 @@ public class Job {
   public final String connection;
   public final String timezone;
 
-  // Oracle specific options
-  public final String parFile;
-
   // Job output
   public List<AvroFile> avro;
 
@@ -59,7 +56,6 @@ public class Job {
     this.destination = builder.destination;
     this.connection = builder.connection;
     this.timezone = builder.timezone;
-    this.parFile = builder.parFile;
   }
 
   public static class Builder {
@@ -76,7 +72,6 @@ public class Job {
     private String destination;
     private String connection;
     private String timezone;
-    private String parFile;
 
     public Builder() {
     }
@@ -142,11 +137,6 @@ public class Job {
 
     public Builder timezone(String timezone) {
       this.timezone = timezone;
-      return this;
-    }
-
-    public Builder parFile(String parFile) {
-      this.parFile = parFile;
       return this;
     }
 

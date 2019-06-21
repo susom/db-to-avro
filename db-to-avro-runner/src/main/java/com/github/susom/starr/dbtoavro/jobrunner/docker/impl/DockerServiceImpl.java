@@ -18,12 +18,14 @@
 package com.github.susom.starr.dbtoavro.jobrunner.docker.impl;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.CreateNetworkResponse;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.command.PingCmd;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.StreamType;
 import com.github.dockerjava.api.model.Volume;
@@ -94,9 +96,16 @@ public class DockerServiceImpl implements DockerService {
     return
         dockerClient
             .createContainerCmd(image)
+            .withHostConfig(
+                new HostConfig()
+                    .withBinds(binds)
+                    .withPortBindings(portBindings)
+                    .withNetworkMode("db-to-avro"))
+            .withIpv4Address("10.10.10.100")
             .withVolumes(volumes)
+            .withName("database")
+            .withHostName("database")
             .withEnv(env.toArray(new String[0]))
-            .withHostConfig(new HostConfig().withBinds(binds).withPortBindings(portBindings))
             .withLabels(new HashMap<String, String>() {{
               put("creator", "db-to-avro");
             }})
@@ -162,6 +171,7 @@ public class DockerServiceImpl implements DockerService {
         out.println(contents);
       }
       Path outputTarFile = Files.createTempFile(null, null);
+      LOGGER.debug("Wrote file in container: {}", tempFile.toAbsolutePath());
       CompressArchiveUtil.tar(tempFile, outputTarFile, true, false);
       try (InputStream uploadStream = Files.newInputStream(outputTarFile)) {
         dockerClient.copyArchiveToContainerCmd(containerId)

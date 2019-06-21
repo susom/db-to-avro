@@ -1,6 +1,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions.impl;
 
 import com.github.susom.database.Config;
+import com.github.susom.database.Sql;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Query;
@@ -39,6 +40,9 @@ public class OracleAvroFns implements AvroFns {
   @Override
   public Observable<AvroFile> saveAsAvro(final Query query) {
     return dbb.withConnectionAccess().transactRx(db -> {
+
+      db.get().ddl("ALTER SESSION DISABLE PARALLEL QUERY").execute();
+      db.get().ddl("ALTER SESSION SET \"_SERIAL_DIRECT_READ\" = TRUE").execute();
 
       String startTime = DateTime.now().toString();
 
@@ -118,65 +122,34 @@ public class OracleAvroFns implements AvroFns {
   @Override
   public Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern) {
 
-    // Check if table doesn't meet partitioning criteria, if not, bail.
-    if (!optimized || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize || targetSize == 0 ||
-        table.columns.stream().noneMatch(c -> c.primaryKey)) {
-      return Observable.empty();
-    }
+    // Only dump the supported column types
+    String columns = table.columns.stream()
+        .filter(c -> c.serializable)
+        .map(c -> c.name)
+        .collect(Collectors.joining(", "));
 
-    // Otherwise split the table using a naive primary key splitting method
-    return Observable.create(emitter -> {
-
-      // Only dump the supported column types
-      String columns = table.columns.stream()
-          .filter(c -> c.serializable)
-          .map(c -> "[" + c.name + "]")
-          .collect(Collectors.joining(", "));
-
-      // Estimate how many rows it will take to reach the target file size for avro output
-      long partitionSize = (targetSize) / (table.bytes / table.rows);
-
-      String primaryKeys = table.columns.stream()
-          .filter(c -> c.primaryKey)
-          .map(c -> "[" + c.name + "]")
-          .collect(Collectors.joining(","));
-
-      String joinKeys = table.columns.stream()
-          .filter(c -> c.primaryKey)
-          .map(c -> "p.[" + c.name + "] = c.[" + c.name + "]")
-          .collect(Collectors.joining(" AND "));
-
-      long offset = 0;
-      int part = 0;
-      do {
-        if (offset + partitionSize > table.rows) {
-          partitionSize = (table.rows - offset);
-        }
-        String sql = String
-            .format(
-                "WITH p AS (SELECT %1$s FROM %2$s WITH (NOLOCK) ORDER BY %1$s OFFSET %3$d ROWS FETCH NEXT %4$d ROWS ONLY) "
-                    + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
-                primaryKeys, table.name, offset, partitionSize, joinKeys, columns);
-
-        String path = pathPattern
-            .replace("%{CATALOG}", "ANY")
-            .replace("%{SCHEMA}", tidy(table.schema))
-            .replace("%{TABLE}", tidy(table.name))
-            .replace("%{PART}", String.format("%03d", part++));
-
-        emitter.onNext(new Query(table, sql, 0, path));
-
-        offset += partitionSize;
-      } while (offset < table.rows);
-
-      emitter.onComplete();
-
-    });
+    return getSegments(table, 64)
+        .map(segment -> {
+          String path = pathPattern
+              .replace("%{CATALOG}", "ANY")
+              .replace("%{SCHEMA}", tidy(table.schema))
+              .replace("%{TABLE}", tidy(table.name))
+              .replace("%{PART}", String.format("%03d", segment.batch));
+          String sql = String
+              .format(Locale.CANADA, "SELECT /*+ NO_INDEX(t) */ %s FROM %s.%s WHERE "
+                      + "(ROWID >= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 0)) AND "
+                      + "(ROWID <= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 32767))",
+                  columns, table.schema, table.name,
+                  segment.id, segment.fileNo, segment.start,
+                  segment.id, segment.fileNo, segment.end);
+          LOGGER.debug("SQL: {}", sql);
+          return new Query(table, sql, 0, path);
+        });
 
   }
 
   private String tidy(final String name) {
-    if (tidy){
+    if (tidy) {
       return name
           .replaceAll("[^a-zA-Z0-9]", " ")
           .replaceAll("\\s", "_")
@@ -184,6 +157,93 @@ public class OracleAvroFns implements AvroFns {
           .toLowerCase();
     } else {
       return name;
+    }
+  }
+
+
+  /* TODO: Where left off: Batches might be less than # of splits -- so need to do a round-robin allocation.
+  TODO: also the block sizes are not the same.. do they need to be added together so block sizes are unioned?
+  What was going on there?    Oraoopdatadrivendbinputformat:282
+
+   */
+
+
+
+  private Observable<Segment> getSegments(final Table table, int batches) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      db.get().underlyingConnection().setSchema(table.schema);
+
+      Sql sql = new Sql();
+      sql.append("SELECT DATA_OBJECT_ID,\n"
+          + "       FILE_ID,\n"
+          + "       RELATIVE_FNO,\n"
+          + "       FILE_BATCH,\n"
+          + "       MIN(START_BLOCK_ID) START_BLOCK_ID,\n"
+          + "       MAX(END_BLOCK_ID)   END_BLOCK_ID,\n"
+          + "       SUM(BLOCKS)         BLOCKS\n"
+          + "FROM (SELECT O.DATA_OBJECT_ID,\n"
+          + "             E.FILE_ID,\n"
+          + "             E.RELATIVE_FNO,\n"
+          + "             E.BLOCK_ID START_BLOCK_ID,\n"
+          + "             E.BLOCK_ID + E.BLOCKS - 1 END_BLOCK_ID,\n"
+          + "             E.BLOCKS,\n"
+          + "             CEIL(\n"
+          + "                         SUM(\n"
+          + "                                 E.BLOCKS)\n"
+          + "                                 OVER (PARTITION BY O.DATA_OBJECT_ID, E.FILE_ID\n"
+          + "                                     ORDER BY E.BLOCK_ID ASC)\n"
+          + "                         / (SUM(E.BLOCKS)\n"
+          + "                                OVER (PARTITION BY O.DATA_OBJECT_ID, E.FILE_ID)\n"
+          + "                         / :batches))\n"
+          + "                        FILE_BATCH\n"
+          + "      FROM DBA_EXTENTS E,\n"
+          + "           DBA_OBJECTS O,\n"
+          + "           DBA_TAB_SUBPARTITIONS TSP\n"
+          + "      WHERE O.OWNER = :schema\n"
+          + "        AND O.OBJECT_NAME = :table\n"
+          + "        AND E.OWNER = :schema\n"
+          + "        AND E.SEGMENT_NAME = :table\n"
+          + "        AND O.OWNER = E.OWNER\n"
+          + "        AND O.OBJECT_NAME = E.SEGMENT_NAME\n"
+          + "        AND (O.SUBOBJECT_NAME = E.PARTITION_NAME\n"
+          + "          OR (O.SUBOBJECT_NAME IS NULL AND E.PARTITION_NAME IS NULL))\n"
+          + "        AND O.OWNER = TSP.TABLE_OWNER(+)\n"
+          + "        AND O.OBJECT_NAME = TSP.TABLE_NAME(+)\n"
+          + "        AND O.SUBOBJECT_NAME = TSP.SUBPARTITION_NAME(+)\n"
+          + "     )\n"
+          + "GROUP BY DATA_OBJECT_ID, FILE_ID,\n"
+          + "         RELATIVE_FNO, FILE_BATCH\n"
+          + "ORDER BY DATA_OBJECT_ID, FILE_ID,\n"
+          + "         RELATIVE_FNO, FILE_BATCH")
+          .argInteger("batches", batches)
+          .argString("schema", table.schema)
+          .argString("table", table.name);
+
+      return db.get().toSelect(sql).queryMany(rs -> new Segment(rs.getIntegerOrZero("DATA_OBJECT_ID"),
+          rs.getIntegerOrZero("RELATIVE_FNO"),
+          rs.getIntegerOrZero("START_BLOCK_ID"),
+          rs.getIntegerOrZero("END_BLOCK_ID"),
+          rs.getIntegerOrZero("FILE_BATCH")
+      ));
+
+    }).toObservable().flatMapIterable(l -> l);
+
+  }
+
+  private class Segment {
+
+    private int id;
+    private int fileNo;
+    private long start;
+    private long end;
+    private int batch;
+
+    public Segment(int id, int fileNo, long start, long end, int batch) {
+      this.id = id;
+      this.fileNo = fileNo;
+      this.start = start;
+      this.end = end;
+      this.batch = batch;
     }
   }
 

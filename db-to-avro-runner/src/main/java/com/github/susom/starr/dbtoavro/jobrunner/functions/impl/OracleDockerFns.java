@@ -6,6 +6,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,13 +24,14 @@ public class OracleDockerFns extends DockerFns {
         .getDouble("oracle.impdp.core.multiplier", 1.0)));
   }
 
-  public Observable<ConsoleOutput> impdp(final String containerId, final String parfile) {
+  public Observable<ConsoleOutput> impdp(final String containerId, final List<String> backupFiles) {
+    assert (backupFiles.size() == 1);
     return dockerService.exec(containerId,
         "impdp",
         String.format("userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
         (impdpThreads > 0)?"PARALLEL="+impdpThreads:"",
-        "PARFILE=/backup/"+parfile
+        "PARFILE=/backup/"+backupFiles.get(0)
     );
   }
 
@@ -50,7 +52,14 @@ public class OracleDockerFns extends DockerFns {
 
   @Override
   public Completable healthCheck(final String containerId) {
+
+    // TODO: make more robust. Need to check for strings
+    // "ORA-12514" (DB not booted)
+    // "ORA-28000" (account is locked)
+
+
     return execSqlShell(containerId, "SELECT 1 FROM DUAL;")
+        .doOnNext(p -> LOGGER.debug(p.getData()))
         .filter(p -> p.getData().contains("----------"))
         .count()
         .flatMapCompletable(count -> {

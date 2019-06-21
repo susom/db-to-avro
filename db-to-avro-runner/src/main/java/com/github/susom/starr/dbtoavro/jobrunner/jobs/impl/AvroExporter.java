@@ -53,8 +53,10 @@ public class AvroExporter implements Exporter {
               .filter(job.schemas::contains) // filter out unwanted schemas
               .flatMap(schema ->
 
-                  dbFns.getTables(job.catalog, schema)
-                      .filter(name -> job.tables.isEmpty() || job.tables.contains(name))
+                  Observable.just(job.tables)
+                      .flatMapIterable(l -> l)
+                      .switchIfEmpty(dbFns.getTables(job.catalog, schema))
+
                       .flatMap(table -> dbFns.introspect(job.catalog, schema, table)
                           .subscribeOn(Schedulers.from(dbPoolSched)))
                       .flatMap(table ->

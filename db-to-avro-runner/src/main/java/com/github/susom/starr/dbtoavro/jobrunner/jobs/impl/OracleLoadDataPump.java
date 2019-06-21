@@ -9,7 +9,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
 import io.reactivex.Single;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,7 +36,6 @@ public class OracleLoadDataPump implements Loader {
 
     // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
-    mounts.add(new File(job.backupDir) + ":" + config.getString("container.backupdir", "/backup"));
 
     if (config.getString("oracle.mounts") != null) {
       mounts.addAll(Arrays.asList(config.getStringOrThrow("oracle.mounts").split("\\s*,\\s*")));
@@ -51,13 +49,13 @@ public class OracleLoadDataPump implements Loader {
         docker.start(containerId)
             .doOnComplete(() -> LOGGER
                 .info(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
-            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(5, 5000)))
+            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(60, 10000)))
             .andThen(docker.execSqlShell(containerId, job.preSql))
             .doOnNext(line -> LOGGER.info(line.getData()))
             .doOnComplete(() -> LOGGER.info("Database pre-sql completed"))
             .doOnComplete(() -> LOGGER.info("Starting database restore"))
             .ignoreElements()
-            .andThen(docker.impdp(containerId, job.parFile))
+            .andThen(docker.impdp(containerId, job.backupFiles))
             .doOnNext(line -> LOGGER.info(line.getData()))
             .ignoreElements()
             .doOnComplete(() -> LOGGER.info("Restore completed"))

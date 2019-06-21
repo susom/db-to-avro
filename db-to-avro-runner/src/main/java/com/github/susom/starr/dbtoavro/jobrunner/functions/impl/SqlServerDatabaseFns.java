@@ -52,6 +52,11 @@ public class SqlServerDatabaseFns extends DatabaseFns {
       Types.CLOB,
       Types.DOUBLE,
       Types.INTEGER,
+
+    // TODO: Are these used in MSSQL?
+//      Types.FLOAT,
+//      Types.DECIMAL,
+
       Types.NCHAR,
       Types.NCLOB,
       Types.NUMERIC,
