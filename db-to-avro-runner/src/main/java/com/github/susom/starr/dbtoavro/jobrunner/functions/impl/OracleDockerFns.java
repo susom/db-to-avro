@@ -30,7 +30,7 @@ public class OracleDockerFns extends DockerFns {
         "impdp",
         String.format("userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
-        (impdpThreads > 0)?"PARALLEL="+impdpThreads:"",
+        (impdpThreads > 0) ? "PARALLEL=" + impdpThreads : "",
         "PARFILE=/backup/"+backupFiles.get(0)
     );
   }
@@ -56,7 +56,6 @@ public class OracleDockerFns extends DockerFns {
     // TODO: make more robust. Need to check for strings
     // "ORA-12514" (DB not booted)
     // "ORA-28000" (account is locked)
-
 
     return execSqlShell(containerId, "SELECT 1 FROM DUAL;")
         .doOnNext(p -> LOGGER.debug(p.getData()))

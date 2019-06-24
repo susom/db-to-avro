@@ -11,6 +11,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -122,30 +123,66 @@ public class OracleAvroFns implements AvroFns {
   @Override
   public Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern) {
 
+    // Check if table doesn't meet partitioning criteria, if not, bail.
+    if (!optimized || table.bytes == 0 || table.bytes < (targetSize * 2) || targetSize == 0) {
+      return Observable.empty();
+    }
+
     // Only dump the supported column types
     String columns = table.columns.stream()
         .filter(c -> c.serializable)
         .map(c -> c.name)
         .collect(Collectors.joining(", "));
 
-    return getSegments(table, 64)
-        .map(segment -> {
-          String path = pathPattern
-              .replace("%{CATALOG}", "ANY")
-              .replace("%{SCHEMA}", tidy(table.schema))
-              .replace("%{TABLE}", tidy(table.name))
-              .replace("%{PART}", String.format("%03d", segment.batch));
-          String sql = String
-              .format(Locale.CANADA, "SELECT /*+ NO_INDEX(t) */ %s FROM %s.%s WHERE "
-                      + "(ROWID >= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 0)) AND "
-                      + "(ROWID <= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 32767))",
-                  columns, table.schema, table.name,
-                  segment.id, segment.fileNo, segment.start,
-                  segment.id, segment.fileNo, segment.end);
-          LOGGER.debug("SQL: {}", sql);
-          return new Query(table, sql, 0, path);
-        });
+    int partitions = (int) (table.bytes / targetSize);
 
+    return getSegments(table, (partitions * 2) + 1)
+        .map(segments -> {
+
+          int splits = Math.min(segments.size(), partitions);
+
+          LOGGER.info("Table {} ({} bytes) has {} chunks which will be merged into {} files", table.name, table.bytes,
+              segments.size(), splits);
+
+          int queriesPerFile = Math.floorDiv(segments.size(), splits);
+
+          List<Query> queries = new ArrayList<>();
+          List<String> subQueries = new ArrayList<>();
+
+          int part = 0;
+          int rr = 0;
+          for (Segment segment : segments) {
+            String sql = String
+                .format(Locale.CANADA, "SELECT /*+ NO_INDEX(t) */ %s FROM %s.%s WHERE "
+                        + "(ROWID >= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 0)) AND "
+                        + "(ROWID <= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 32767))",
+                    columns, table.schema, table.name,
+                    segment.id, segment.fileNo, segment.start,
+                    segment.id, segment.fileNo, segment.end);
+            subQueries.add(sql);
+            if (rr >= queriesPerFile) {
+              rr = 0;
+              String path = pathPattern
+                  .replace("%{CATALOG}", "ANY")
+                  .replace("%{SCHEMA}", tidy(table.schema))
+                  .replace("%{TABLE}", tidy(table.name))
+                  .replace("%{PART}", String.format("%03d", part++));
+              queries.add(new Query(table, String.join(" UNION ALL ", subQueries), 0, path));
+              subQueries.clear();
+            }
+            rr++;
+
+          }
+          if (subQueries.size() > 0) {
+            String path = pathPattern
+                .replace("%{CATALOG}", "ANY")
+                .replace("%{SCHEMA}", tidy(table.schema))
+                .replace("%{TABLE}", tidy(table.name))
+                .replace("%{PART}", String.format("%03d", part));
+            queries.add(new Query(table, String.join(" UNION ALL ", subQueries), 0, path));
+          }
+          return queries;
+        }).flatMapIterable(l -> l);
   }
 
   private String tidy(final String name) {
@@ -160,16 +197,7 @@ public class OracleAvroFns implements AvroFns {
     }
   }
 
-
-  /* TODO: Where left off: Batches might be less than # of splits -- so need to do a round-robin allocation.
-  TODO: also the block sizes are not the same.. do they need to be added together so block sizes are unioned?
-  What was going on there?    Oraoopdatadrivendbinputformat:282
-
-   */
-
-
-
-  private Observable<Segment> getSegments(final Table table, int batches) {
+  private Observable<List<Segment>> getSegments(final Table table, int batches) {
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setSchema(table.schema);
 
@@ -219,14 +247,19 @@ public class OracleAvroFns implements AvroFns {
           .argString("schema", table.schema)
           .argString("table", table.name);
 
-      return db.get().toSelect(sql).queryMany(rs -> new Segment(rs.getIntegerOrZero("DATA_OBJECT_ID"),
+      List<Segment> segments = db.get().toSelect(sql).queryMany(rs -> new Segment(rs.getIntegerOrZero("DATA_OBJECT_ID"),
           rs.getIntegerOrZero("RELATIVE_FNO"),
           rs.getIntegerOrZero("START_BLOCK_ID"),
           rs.getIntegerOrZero("END_BLOCK_ID"),
           rs.getIntegerOrZero("FILE_BATCH")
       ));
 
-    }).toObservable().flatMapIterable(l -> l);
+      // The blocks get larger for each segment, we randomize so the file sizes are more consistent.
+      Collections.shuffle(segments);
+
+      return segments;
+
+    }).toObservable();
 
   }
 

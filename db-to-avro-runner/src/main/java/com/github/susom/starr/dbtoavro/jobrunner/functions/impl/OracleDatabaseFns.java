@@ -84,7 +84,6 @@ public class OracleDatabaseFns extends DatabaseFns {
   @Override
   public Observable<Table> introspect(String catalog, String schema, String table) {
     return dbb.withConnectionAccess().transactRx(db -> {
-      LOGGER.info("Introspecting table {}", table);
       db.get().underlyingConnection().setSchema(schema);
 
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
@@ -97,7 +96,9 @@ public class OracleDatabaseFns extends DatabaseFns {
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
           cols.add(new Column(colName, type, typeName, isSerializable(type)));
-          LOGGER.debug("Table {} Column {} Type {} ({}) Supported {}", table, colName, typeName, type, isSerializable(type));
+          if (!isSerializable(type)) {
+            LOGGER.debug("Table {} Column {} Type {} ({}) will be ignored", table, colName, typeName, type);
+          }
         }
         // Get primary keys
         try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
@@ -113,12 +114,13 @@ public class OracleDatabaseFns extends DatabaseFns {
           .argString(table)
           .queryLongOrZero();
 
+      // TODO: Re-enable for production. Also need to get Avro #rows written...
       // Oracle defaults to an insane amount of threads killing the app
-      int cores = Runtime.getRuntime().availableProcessors();
+      //      int cores = Runtime.getRuntime().availableProcessors();
 
       // Number of rows
-//      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
-//      long rows = db.get().toSelect(sql).queryLongOrZero();
+      //      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
+      //      long rows = db.get().toSelect(sql).queryLongOrZero();
 
       return new Table(catalog, schema, table, cols, bytes, 0);
 
@@ -142,7 +144,10 @@ public class OracleDatabaseFns extends DatabaseFns {
         List<String> tablesList = new ArrayList<>();
         int counter = 0;
         while (tables.next()) {
-          tablesList.add(tables.getString(3));
+          String name = tables.getString(3);
+          if (!name.contains("SYS_IOT")) {
+            tablesList.add(tables.getString(3));
+          }
           if (++counter % 100 == 0) {
             LOGGER.debug("{} tables read...", counter);
           }
