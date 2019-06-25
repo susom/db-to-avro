@@ -5,7 +5,7 @@ temporary Docker container running the appropriate vendor database, and then exp
 
 ### Current Progress
 
-This application is in beta status, and currently supports loading a Microsoft SQL Server backup into a container and exporting as Avro. Oracle support is forthcoming.
+MSSQL Server backups and Oracle Datapump exports are currently supported. Oracle supports row-level multi-threading for high performance.
 
 ### Architecture
 
@@ -16,21 +16,35 @@ The application is asynchronous and multi-threaded using [RxJava2](https://githu
 
 ### Basic Command Line Usage
 
+MSSQL Server
 ```bash
 java -jar db-to-avro.jar \
    --flavor=sqlserver \
-   --backup-dir=Backups/ \
+   --backup-dir=backups/ \
    --backup-files=AdventureWorksDW2016_EXT.bak
    --catalog=AdventureWorks2016 \
    --schemas=dbo \
    --destination=avro/
 ```
-
-This will restore the Microsoft AdventureWorks database from a backup set located in `/Backups`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
+This will restore the Microsoft AdventureWorks database from a backup set located in `backups/`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
 All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
+
+Oracle
+```bash
+java -jar db-to-avro.jar \
+   --flavor=oracle \
+   --backup-dir=backups/ \
+   --backup-files=HR.par
+   --schemas=HRDEMO \
+   --destination=avro/
+```
+This will restore the Oracle HR demo database from a backup set located in `backups/`, using a par file `HR.par`.
+All tables within schema HR will be exported as Avro files to the directory `avro/`
+
 
 ### Exporting an Existing Database
 
+MSSQL Server
 ```bash
 java -jar db-to-avro.jar \
   --connect="jdbc:sqlserver://localhost" \
@@ -42,26 +56,39 @@ java -jar db-to-avro.jar \
   --destination=avro/
 ```
 
-This does the same as the above, but instead of loading a database backup, it will use the database pointed at by the connection string.
-All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
+Oracle
+```bash
+java -jar db-to-avro.jar \
+  --connect="jdbc:oracle:thin:@localhost:1521/ORCLPDB1" \
+  --user="system" \
+  --password="..."  \
+  --flavor=oracle  \
+  --schemas=HR  \
+  --destination=avro/
+```
+
+These do the same as the above, but instead of loading a database backup, it will use an existing database via the connection string.
+
+
 
 ### Command Line Options
 
 ```bash
 Option (* = required)    Description
 ---------------------    -----------
-* --flavor <Flavor>      database type (sqlserver, oracle)
---connect <String>       jdbc connection string for existing database
---user <String>          database user (existing db)
---password <String>      database password (existing db)
 --backup-dir <String>    directory containing backup to restore
---backup-files <String>  comma-delimited list of backup files
+--backup-files <String>  comma-delimited list of backup files, or a single .par file
+--catalog <String>       catalog to export (Oracle N/A)
+--connect <String>       jdbc connection string for existing database
 --destination <String>   avro destination directory
---post-sql <String>      sql to execute after restore/connect
---pre-sql <String>       sql to execute before restore/connect
-* --catalog <String>     catalog to export
+--exclude <String>       exclusions in form schema(.table)(.column)
+* --flavor <Flavor>      database type (sqlserver, oracle)
+--password <String>      database password (existing db)
+--post-sql <File>        path of sql file to execute after restore/connect
+--pre-sql <File>         path of sql file to execute before restore/connect
 --schemas <String>       only export this comma-delimited list of schemas
 --tables <String>        only export this comma-delimited list of tables
+--user <String>          database user (existing db)
 -h, --help               show help
 ```
 
@@ -84,29 +111,29 @@ sqlserver.database.user=SA
 sqlserver.database.password=${UUID}
 sqlserver.image=mcr.microsoft.com/mssql/server:2017-latest
 sqlserver.env=ACCEPT_EULA=Y,SA_PASSWORD=${UUID}
-# Attempt to dump a table in parallel using partitions based on PKs
-sqlserver.optimized.enable=true
+# Attempt to dump a table in parallel using partitions based on PKs (beta)
+sqlserver.optimized.enable=false
 
 # Oracle defaults
+oracle.database.url=jdbc:oracle:thin:@10.10.10.100:1521/ORCLPDB1
 oracle.database.user=system
 oracle.database.password=${UUID}
-oracle.image=oracle/database:12.2.0.1-ee
+oracle.ports=1521:1521
+oracle.image=gcr.io/som-rit-phi-starr-dev/oracle-database:12.2.0.1-ee
+oracle.mounts=/mnt/database:/opt/oracle/oradata,/mnt/backups:/backup
+oracle.env=ORACLE_CHARACTERSET=WE8ISO8859P1,ORACLE_PWD=${UUID}
+oracle.impdp.core.multiplier=1
+oracle.optimized.enable=true
 
-# Target size for generated Avro files, based on *uncompressed* source table bytes. Tables under this size will not
-# be split into multiple files. Set to zero for unlimited file size.
-avro.targetsize=1000000000
-
-# How many rows to fetch per DB query
-avro.fetchsize=100000
-
-# Pattern for creating the Avro output.
-avro.filename=%{CATALOG}.%{SCHEMA}.%{TABLE}-%{PART}.avro
-
-# Filename for manifest
+# Target size for generated Avro files, based on *uncompressed* source table bytes.
+# Set to zero for unlimited file size.
+avro.filename=%{SCHEMA}.%{TABLE}-%{PART}.avro
 avro.logfile=job.json
-
-# Avro compression codec (snappy or null recommended)
 avro.codec=snappy
+avro.targetsize=1000000000
+avro.fetchsize=5000
+# Normalize table names (columns always normalized)
+avro.tidy=true
 
 # Core-count multiplier determines number of avro threads
 avro.core.multiplier=0.75
@@ -118,8 +145,19 @@ Currently the application consists of a single module "db-to-avro-runner". More 
 
 ### TODO
 
-* Oracle support
+* Option to save directly to a GCS bucket
+* Support for regex in schema/table/column exclusion filters
+* db-goodies ETL needs to return number of rows written
+  * Validation: Number of rows in database should match number of rows written by db-goodies ETL
+* Resume feature: cancelled/crashed jobs should resume at last table exported
+* Automation
+  - Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
+  - Job runner that reads VM metadata for job input (?)
+  - Pub/sub job runner (?)
+*
+* Unit tests(!)
 
-* SUSOM ETL library (from database-goodies) should have options for:
-  * Lowercasing entity names
-  * Cleaning entity names (remove newlines, "$", etc.)
+### Known Issues
+* Table and column names are normalized in db-goodies ETL, which is not returned in job output log.
+* SQL server is single-threaded (per-table) and is much slower than Oracle
+* Excluded tables are not explicitly noted in job output (they just aren't listed)

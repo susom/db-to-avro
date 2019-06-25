@@ -111,7 +111,10 @@ public class OracleDatabaseFns extends DatabaseFns {
       }
 
       // Number of bytes
-      long bytes = db.get().toSelect("SELECT BYTES FROM DBA_SEGMENTS WHERE SEGMENT_TYPE='TABLE' AND SEGMENT_NAME = ?")
+      long bytes = db.get().toSelect("SELECT SUM(BYTES)\n"
+          + "FROM DBA_SEGMENTS WHERE SEGMENT_TYPE IN ('TABLE', 'TABLE PARTITION', 'TABLE SUBPARTITION')\n"
+          + "AND TABLESPACE_NAME = ? AND SEGMENT_NAME = ?")
+          .argString(schema)
           .argString(table)
           .queryLongOrZero();
 
