@@ -146,14 +146,12 @@ public class OracleDatabaseFns extends DatabaseFns {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
         List<String> tablesList = new ArrayList<>();
-        int counter = 0;
         while (tables.next()) {
           String name = tables.getString(3);
           if (!name.contains("SYS_IOT")) {
             tablesList.add(tables.getString(3));
           }
         }
-        LOGGER.debug("{} tables", counter);
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);
