@@ -98,7 +98,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Observable<Table> introspect(String catalog, String schema, String table) {
+  public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters) {
     return dbb.withConnectionAccess().transactRx(db -> {
       LOGGER.info("Introspecting table {}", table);
       db.get().underlyingConnection().setCatalog(catalog);
@@ -113,7 +113,9 @@ public class SqlServerDatabaseFns extends DatabaseFns {
           String colName = columns.getString(4);
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
-          cols.add(new Column(colName, type, typeName, isSerializable(type)));
+          boolean serializable = isSerializable(type) &&
+              filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
+          cols.add(new Column(colName, type, typeName, serializable));
         }
         // Get primary keys
         try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {

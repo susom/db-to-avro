@@ -74,9 +74,10 @@ public abstract class DatabaseFns {
    * @param catalog catalog to query
    * @param schema schema to query
    * @param table table to introspect
+   * @param filters filter definitions
    * @return observable of table with row counts, byte sizes, and supported column information
    */
-  abstract public Observable<Table> introspect(String catalog, String schema, String table);
+  abstract public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters);
 
   abstract public Single<String> getRestoreSql(String catalog, List<String> backupFiles);
 

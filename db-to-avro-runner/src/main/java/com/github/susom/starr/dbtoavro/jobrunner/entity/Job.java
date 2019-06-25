@@ -33,6 +33,7 @@ public class Job {
   public final String catalog;
   public final List<String> schemas;
   public final List<String> tables;
+  public final List<String> exclusions;
   public final File postSql;
   public final File preSql;
   public final Flavor flavor;
@@ -50,6 +51,7 @@ public class Job {
     this.catalog = builder.catalog;
     this.schemas = builder.schemas;
     this.tables = builder.tables;
+    this.exclusions = builder.exclusions;
     this.postSql = builder.postSql;
     this.preSql = builder.preSql;
     this.flavor = builder.flavor;
@@ -66,6 +68,7 @@ public class Job {
     private String catalog;
     private List<String> schemas;
     private List<String> tables;
+    private List<String> exclusions;
     private File postSql;
     private File preSql;
     private Flavor flavor;
@@ -107,6 +110,11 @@ public class Job {
 
     public Builder tables(List<String> tables) {
       this.tables = tables;
+      return this;
+    }
+
+    public Builder exclusions(List<String> exclusions) {
+      this.exclusions = exclusions;
       return this;
     }
 

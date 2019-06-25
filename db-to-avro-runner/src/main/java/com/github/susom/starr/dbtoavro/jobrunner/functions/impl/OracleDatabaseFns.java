@@ -30,7 +30,6 @@ import java.sql.ResultSet;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +81,7 @@ public class OracleDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Observable<Table> introspect(String catalog, String schema, String table) {
+  public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters) {
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setSchema(schema);
 
@@ -95,7 +94,9 @@ public class OracleDatabaseFns extends DatabaseFns {
           String colName = columns.getString(4);
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
-          cols.add(new Column(colName, type, typeName, isSerializable(type)));
+          boolean serializable = isSerializable(type) &&
+              filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
+          cols.add(new Column(colName, type, typeName, serializable));
           if (!isSerializable(type)) {
             LOGGER.debug("Table {} Column {} Type {} ({}) will be ignored", table, colName, typeName, type);
           }
@@ -148,11 +149,8 @@ public class OracleDatabaseFns extends DatabaseFns {
           if (!name.contains("SYS_IOT")) {
             tablesList.add(tables.getString(3));
           }
-          if (++counter % 100 == 0) {
-            LOGGER.debug("{} tables read...", counter);
-          }
         }
-        LOGGER.debug("{} tables read...", counter);
+        LOGGER.debug("{} tables", counter);
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);

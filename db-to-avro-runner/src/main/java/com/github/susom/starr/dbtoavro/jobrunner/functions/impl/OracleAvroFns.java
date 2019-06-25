@@ -84,11 +84,11 @@ public class OracleAvroFns implements AvroFns {
     // Only dump the supported column types
     String columns = table.columns.stream()
         .filter(c -> c.serializable)
-        .map(c -> c.name)
+        .map(c -> "\""+c.name+"\"")
         .collect(Collectors.joining(", "));
 
     String sql = String
-        .format(Locale.CANADA, "SELECT %s FROM %s.%s", columns, table.schema,
+        .format(Locale.CANADA, "SELECT %s FROM \"%s\".\"%s\"", columns, table.schema,
             table.name);
 
     String path;
@@ -131,7 +131,7 @@ public class OracleAvroFns implements AvroFns {
     // Only dump the supported column types
     String columns = table.columns.stream()
         .filter(c -> c.serializable)
-        .map(c -> c.name)
+        .map(c -> "\""+c.name+"\"")
         .collect(Collectors.joining(", "));
 
     int partitions = (int) (table.bytes / targetSize);
@@ -153,7 +153,7 @@ public class OracleAvroFns implements AvroFns {
           int rr = 0;
           for (Segment segment : segments) {
             String sql = String
-                .format(Locale.CANADA, "SELECT /*+ NO_INDEX(t) */ %s FROM %s.%s WHERE "
+                .format(Locale.CANADA, "SELECT /*+ NO_INDEX(t) */ %s FROM \"%s\".\"%s\" WHERE "
                         + "(ROWID >= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 0)) AND "
                         + "(ROWID <= DBMS_ROWID.ROWID_CREATE(1, %d, %d, %d, 32767))",
                     columns, table.schema, table.name,

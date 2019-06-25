@@ -49,34 +49,33 @@ public class AvroExporter implements Exporter {
           AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
           DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
 
-          return dbFns.getSchemas(job.catalog)
-              .filter(job.schemas::contains) // filter out unwanted schemas
-              .flatMap(schema ->
-
-                  Observable.just(job.tables)
-                      .flatMapIterable(l -> l)
-                      .switchIfEmpty(dbFns.getTables(job.catalog, schema))
-
-                      .flatMap(table -> dbFns.introspect(job.catalog, schema, table)
-                          .subscribeOn(Schedulers.from(dbPoolSched)))
-                      .flatMap(table ->
-
-                          avroFns.optimizedQuery(table, targetSize, path)
-                              .flatMap(query ->
-                                  avroFns.saveAsAvro(query)
-                                      .subscribeOn(Schedulers.from(dbPoolSched))
-                              )
-                              .switchIfEmpty(
-                                  avroFns.query(table, targetSize, path)
-                                      .flatMap(query ->
-                                          avroFns.saveAsAvro(query)
-                                              .subscribeOn(Schedulers.from(dbPoolSched))
-                                      )
-                              )
-
-                      )
-
-              );
+          return
+              Observable.just(job.schemas).flatMapIterable(l -> l)
+                  .switchIfEmpty(dbFns.getSchemas(job.catalog))
+                  .filter(schema -> job.exclusions.stream().noneMatch(s -> s.equals(schema)))
+                  .flatMap(schema ->
+                      Observable.just(job.tables).flatMapIterable(l -> l)
+                          .switchIfEmpty(dbFns.getTables(job.catalog, schema))
+                          .filter(table -> job.exclusions.stream().noneMatch(s -> s.equals(schema + "." + table)))
+                          .flatMap(table ->
+                              dbFns.introspect(job.catalog, schema, table, job.exclusions)
+                                  .subscribeOn(Schedulers.from(dbPoolSched))
+                          )
+                          .flatMap(table ->
+                              avroFns.optimizedQuery(table, targetSize, path)
+                                  .flatMap(query ->
+                                      avroFns.saveAsAvro(query)
+                                          .subscribeOn(Schedulers.from(dbPoolSched))
+                                  )
+                                  .switchIfEmpty(
+                                      avroFns.query(table, targetSize, path)
+                                          .flatMap(query ->
+                                              avroFns.saveAsAvro(query)
+                                                  .subscribeOn(Schedulers.from(dbPoolSched))
+                                          )
+                                  )
+                          )
+                  );
         })
         .doOnComplete(dbPoolSched::shutdown);
   }

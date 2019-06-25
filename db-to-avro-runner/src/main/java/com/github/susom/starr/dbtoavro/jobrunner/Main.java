@@ -98,6 +98,10 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
+    OptionSpec<String> filters = parser.accepts("exclude", "exclusions in form schema(.table)(.column)")
+        .withRequiredArg()
+        .ofType(String.class)
+        .withValuesSeparatedBy(',');
     OptionSpec<File> preSql = parser.accepts("pre-sql", "path of sql file to execute before restore/connect")
         .withRequiredArg().ofType(File.class);
     OptionSpec<File> postSql = parser.accepts("post-sql", "path of sql file to execute after restore/connect")
@@ -125,6 +129,7 @@ public class Main {
           .catalog(optionSet.valueOf(catalog))
           .schemas(optionSet.valuesOf(schemas))
           .tables(optionSet.valuesOf(tables))
+          .exclusions(optionSet.valuesOf(filters))
           .backupDir(optionSet.valueOf(backupDir))
           .backupFiles(optionSet.has(backupFiles)
               ? optionSet.valuesOf(backupFiles)
