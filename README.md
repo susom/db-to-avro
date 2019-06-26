@@ -145,6 +145,7 @@ Currently the application consists of a single module "db-to-avro-runner". More 
 
 ### TODO
 
+* Ability to split based on number of rows, not just table bytes
 * Option to save directly to a GCS bucket
 * Support for regex in schema/table/column exclusion filters
 * db-goodies ETL needs to return number of rows written

@@ -111,9 +111,34 @@ public class OracleDatabaseFns extends DatabaseFns {
       }
 
       // Number of bytes
-      long bytes = db.get().toSelect("SELECT SUM(BYTES)\n"
-          + "FROM DBA_SEGMENTS WHERE SEGMENT_TYPE IN ('TABLE', 'TABLE PARTITION', 'TABLE SUBPARTITION')\n"
-          + "AND TABLESPACE_NAME = ? AND SEGMENT_NAME = ?")
+      long bytes = db.get().toSelect("\n"
+          + "SELECT SUM(BYTES)\n"
+          + "FROM (SELECT SEGMENT_NAME TABLE_NAME, OWNER, BYTES\n"
+          + "      FROM DBA_SEGMENTS\n"
+          + "      WHERE SEGMENT_TYPE IN ('TABLE', 'TABLE PARTITION', 'TABLE SUBPARTITION')\n"
+          + "      UNION ALL\n"
+          + "      SELECT I.TABLE_NAME, I.OWNER, S.BYTES\n"
+          + "      FROM DBA_INDEXES I,\n"
+          + "           DBA_SEGMENTS S\n"
+          + "      WHERE S.SEGMENT_NAME = I.INDEX_NAME\n"
+          + "        AND S.OWNER = I.OWNER\n"
+          + "        AND S.SEGMENT_TYPE IN ('INDEX', 'INDEX PARTITION', 'INDEX SUBPARTITION')\n"
+          + "      UNION ALL\n"
+          + "      SELECT L.TABLE_NAME, L.OWNER, S.BYTES\n"
+          + "      FROM DBA_LOBS L,\n"
+          + "           DBA_SEGMENTS S\n"
+          + "      WHERE S.SEGMENT_NAME = L.SEGMENT_NAME\n"
+          + "        AND S.OWNER = L.OWNER\n"
+          + "        AND S.SEGMENT_TYPE IN ('LOBSEGMENT', 'LOB PARTITION')\n"
+          + "      UNION ALL\n"
+          + "      SELECT L.TABLE_NAME, L.OWNER, S.BYTES\n"
+          + "      FROM DBA_LOBS L,\n"
+          + "           DBA_SEGMENTS S\n"
+          + "      WHERE S.SEGMENT_NAME = L.INDEX_NAME\n"
+          + "        AND S.OWNER = L.OWNER\n"
+          + "        AND S.SEGMENT_TYPE = 'LOBINDEX')\n"
+          + "WHERE OWNER = ?\n"
+          + "  AND TABLE_NAME = ?\n")
           .argString(schema)
           .argString(table)
           .queryLongOrZero();
