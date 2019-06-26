@@ -108,12 +108,6 @@ public class Main {
         .withRequiredArg().ofType(File.class);
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
-    // TODO:
-    //  switches for deleting docker container after successful export
-    //  switches for listing catalogs, schemas, and tables
-    //  switch for testing connection to db
-    //  switch for setting file name pattern
-
     try {
 
       OptionSet optionSet = parser.parse(args);
@@ -176,7 +170,7 @@ public class Main {
             exit(1);
           })
           .blockingAwait();
-      System.out.println((System.nanoTime() - start) / 1000000000);
+      System.out.println("Elapsed time: "+(System.nanoTime() - start) / 1000000000+" seconds");
 
     } catch (OptionException ex) {
       parser.printHelpOn(System.out);

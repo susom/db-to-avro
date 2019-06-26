@@ -22,7 +22,6 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Completable;
-import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.File;

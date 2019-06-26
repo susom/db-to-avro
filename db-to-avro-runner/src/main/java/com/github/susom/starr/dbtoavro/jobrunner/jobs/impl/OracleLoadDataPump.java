@@ -34,9 +34,7 @@ public class OracleLoadDataPump implements Loader {
 
     LOGGER.info("Starting Oracle data pump restore");
 
-    // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
-
     if (config.getString("oracle.mounts") != null) {
       mounts.addAll(Arrays.asList(config.getStringOrThrow("oracle.mounts").split("\\s*,\\s*")));
     }
@@ -49,7 +47,7 @@ public class OracleLoadDataPump implements Loader {
         docker.start(containerId)
             .doOnComplete(() -> LOGGER
                 .info(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
-            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(60, 10000)))
+            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(180, 5000)))
             .andThen(docker.execSqlShell(containerId, job.preSql))
             .doOnNext(line -> LOGGER.info(line.getData()))
             .doOnComplete(() -> LOGGER.info("Database pre-sql completed"))

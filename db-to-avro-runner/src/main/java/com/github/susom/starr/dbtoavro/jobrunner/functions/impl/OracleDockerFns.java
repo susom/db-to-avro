@@ -5,6 +5,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -25,7 +26,9 @@ public class OracleDockerFns extends DockerFns {
   }
 
   public Observable<ConsoleOutput> impdp(final String containerId, final List<String> backupFiles) {
-    assert (backupFiles.size() == 1);
+    if (backupFiles.size() != 1) {
+      return Observable.error(new Throwable("Oracle impdp requires a single .par file."));
+    }
     return dockerService.exec(containerId,
         "impdp",
         String.format("userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
@@ -55,17 +58,20 @@ public class OracleDockerFns extends DockerFns {
 
     // TODO: make more robust. Need to check for strings
     // "ORA-12514" (DB not booted)
-    // "ORA-28000" (account is locked)
+    // "ORA-28000" (account is locked) etc.
 
+    List<String> stdout = new ArrayList<>();
     return execSqlShell(containerId, "SELECT 1 FROM DUAL;")
-        .doOnNext(p -> LOGGER.debug(p.getData()))
+        .doOnNext(o -> stdout.add(o.getData()))
         .filter(p -> p.getData().contains("----------"))
         .count()
         .flatMapCompletable(count -> {
           if (count > 0) {
+            // Database may not actually be 100% done yet, tablespace modifications will fail with ORA-01155
+            Thread.sleep(15000);
             return Completable.complete();
           } else {
-            return Completable.error(new IllegalArgumentException("Health check failed"));
+            return Completable.error(new Throwable("Failed to connect to database" + String.join("\n", stdout)));
           }
         });
   }

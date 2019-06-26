@@ -146,6 +146,8 @@ Currently the application consists of a single module "db-to-avro-runner". More 
 ### TODO
 
 * Ability to split based on number of rows, not just table bytes
+* Pre/post scripts should simply be in the mounted backup directory, not copied into the container.
+* Flag for mount point for database container, instead of using .properties file(?)
 * Option to save directly to a GCS bucket
 * Support for regex in schema/table/column exclusion filters
 * db-goodies ETL needs to return number of rows written
@@ -155,7 +157,12 @@ Currently the application consists of a single module "db-to-avro-runner". More 
   - Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
   - Job runner that reads VM metadata for job input (?)
   - Pub/sub job runner (?)
-*
+* Formalized progress reporting (not logging)
+* Switches for:
+  * Deleting docker container after successful export
+  * Listing catalogs, schemas, and tables
+  * Testing connection to db
+
 * Unit tests(!)
 
 ### Known Issues

@@ -116,9 +116,8 @@ public class OracleAvroFns implements AvroFns {
 
   /**
    * {@inheritDoc}
-   * <p>Attempts to split table into partitions using the primary key(s).</p>
-   * <p>This works best if the table primary keys are a clustered index.</p>
-   * <p>If the table cannot be split, a single partition is emitted.</p>
+   * <p>High-performance table export using Oracle ROWID pseudo-column. Returns multiple queries for a single table,
+   * partitioned by block ranges.</p>
    */
   @Override
   public Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern) {
