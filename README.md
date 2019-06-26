@@ -76,19 +76,19 @@ These do the same as the above, but instead of loading a database backup, it wil
 ```bash
 Option (* = required)    Description
 ---------------------    -----------
---backup-dir <String>    directory containing backup to restore
---backup-files <String>  comma-delimited list of backup files, or a single .par file
---catalog <String>       catalog to export (Oracle N/A)
---connect <String>       jdbc connection string for existing database
---destination <String>   avro destination directory
---exclude <String>       exclusions in form schema(.table)(.column)
-* --flavor <Flavor>      database type (sqlserver, oracle)
---password <String>      database password (existing db)
---post-sql <File>        path of sql file to execute after restore/connect
---pre-sql <File>         path of sql file to execute before restore/connect
---schemas <String>       only export this comma-delimited list of schemas
---tables <String>        only export this comma-delimited list of tables
---user <String>          database user (existing db)
+--backup-dir     directory containing backup to restore
+--backup-files   comma-delimited list of backup files, or a single .par file
+--catalog        catalog to export (Oracle N/A)
+--connect        jdbc connection string for existing database
+--destination    avro destination directory
+--exclude        exclusions in form schema(.table)(.column)
+* --flavor       database type (sqlserver, oracle)
+--password       database password (existing db)
+--post-sql       path of sql file to execute after restore/connect
+--pre-sql        path of sql file to execute before restore/connect
+--schemas        only export this comma-delimited list of schemas
+--tables         only export this comma-delimited list of tables
+--user           database user (existing db)
 -h, --help               show help
 ```
 
