@@ -94,8 +94,8 @@ public class OracleDatabaseFns extends DatabaseFns {
           String colName = columns.getString(4);
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
-          boolean serializable = isSerializable(type) &&
-              filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
+          boolean serializable = isSerializable(type)
+              && filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
           cols.add(new Column(colName, type, typeName, serializable));
           if (!isSerializable(type)) {
             LOGGER.debug("Table {} Column {} Type {} ({}) will be ignored", table, colName, typeName, type);

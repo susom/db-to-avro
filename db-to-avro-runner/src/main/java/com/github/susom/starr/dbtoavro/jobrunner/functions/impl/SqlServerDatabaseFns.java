@@ -113,8 +113,8 @@ public class SqlServerDatabaseFns extends DatabaseFns {
           String colName = columns.getString(4);
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
-          boolean serializable = isSerializable(type) &&
-              filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
+          boolean serializable = isSerializable(type)
+              && filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
           cols.add(new Column(colName, type, typeName, serializable));
         }
         // Get primary keys
@@ -138,7 +138,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
             }
           }
         }
-      } catch (SQLException ignored) {
+      } catch (SQLException expected) {
       }
 
       // Number of rows

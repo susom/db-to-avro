@@ -18,14 +18,12 @@
 package com.github.susom.starr.dbtoavro.jobrunner.docker.impl;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.CreateNetworkResponse;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.command.PingCmd;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
-import com.github.dockerjava.api.model.Network;
 import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.StreamType;
 import com.github.dockerjava.api.model.Volume;
@@ -42,11 +40,11 @@ import io.reactivex.ObservableEmitter;
 import io.reactivex.exceptions.Exceptions;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -106,9 +104,12 @@ public class DockerServiceImpl implements DockerService {
             .withName("database")
             .withHostName("database")
             .withEnv(env.toArray(new String[0]))
-            .withLabels(new HashMap<String, String>() {{
-              put("creator", "db-to-avro");
-            }})
+            .withLabels(new HashMap<String, String>() {
+                          {
+                            put("creator", "db-to-avro");
+                          }
+                        }
+            )
             .exec().getId();
   }
 
@@ -167,9 +168,7 @@ public class DockerServiceImpl implements DockerService {
   public void createFileFromString(String containerId, String filename, String contents) {
     try {
       Path tempFile = Files.createTempDirectory(null).resolve(filename);
-      try (PrintWriter out = new PrintWriter(tempFile.toFile())) {
-        out.println(contents);
-      }
+      Files.write(tempFile, contents.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
       Path outputTarFile = Files.createTempFile(null, null);
       LOGGER.debug("Wrote file in container: {}", tempFile.toAbsolutePath());
       CompressArchiveUtil.tar(tempFile, outputTarFile, true, false);

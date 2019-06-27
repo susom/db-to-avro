@@ -120,8 +120,13 @@ public class SqlServerAvroFns implements AvroFns {
   public Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern) {
 
     // Check if table doesn't meet partitioning criteria, if not, bail.
-    if (!optimized || table.bytes == 0 || table.rows == 0 || table.bytes < targetSize || targetSize == 0 ||
-        table.columns.stream().noneMatch(c -> c.primaryKey)) {
+    if (!optimized
+        || table.bytes == 0
+        || table.rows == 0
+        || table.bytes < targetSize
+        || targetSize == 0
+        || table.columns.stream().noneMatch(c -> c.primaryKey)
+    ) {
       return Observable.empty();
     }
 
@@ -154,7 +159,7 @@ public class SqlServerAvroFns implements AvroFns {
           partitionSize = (table.rows - offset);
         }
         String sql = String
-            .format(
+            .format(Locale.CANADA,
                 "WITH p AS (SELECT %1$s FROM %2$s WITH (NOLOCK) ORDER BY %1$s OFFSET %3$d ROWS FETCH NEXT %4$d ROWS ONLY) "
                     + "SELECT %6$s FROM %2$s AS c WHERE EXISTS (SELECT 1 FROM p WHERE %5$s)",
                 primaryKeys, table.name, offset, partitionSize, joinKeys, columns);
@@ -163,7 +168,7 @@ public class SqlServerAvroFns implements AvroFns {
             .replace("%{CATALOG}", tidy(table.catalog))
             .replace("%{SCHEMA}", tidy(table.schema))
             .replace("%{TABLE}", tidy(table.name))
-            .replace("%{PART}", String.format("%03d", part++));
+            .replace("%{PART}", String.format(Locale.CANADA, "%03d", part++));
 
         emitter.onNext(new Query(table, sql, 0, path));
 
@@ -177,12 +182,12 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   private String tidy(final String name) {
-    if (tidy){
+    if (tidy) {
       return name
           .replaceAll("[^a-zA-Z0-9]", " ")
           .replaceAll("\\s", "_")
           .trim()
-          .toLowerCase();
+          .toLowerCase(Locale.CANADA);
     } else {
       return name;
     }

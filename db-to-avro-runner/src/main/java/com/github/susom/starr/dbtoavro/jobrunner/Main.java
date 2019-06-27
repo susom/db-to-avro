@@ -82,7 +82,8 @@ public class Main {
     OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore")
         .requiredUnless(connection)
         .withRequiredArg();
-    OptionSpec<String> backupFiles = parser.accepts("backup-files", "comma-delimited list of backup files, or a single .par file")
+    OptionSpec<String> backupFiles = parser
+        .accepts("backup-files", "comma-delimited list of backup files, or a single .par file")
         .requiredIf(backupDir)
         .availableUnless(connection)
         .withRequiredArg()
@@ -127,9 +128,9 @@ public class Main {
           .backupDir(optionSet.valueOf(backupDir))
           .backupFiles(optionSet.has(backupFiles)
               ? optionSet.valuesOf(backupFiles)
-              : (optionSet.has(backupDir) ?
-                  Files.list(Paths.get(optionSet.valueOf(backupDir))).filter(Files::isRegularFile).map(Path::toString)
-                      .collect(Collectors.toList())
+              : (optionSet.has(backupDir)
+                  ? Files.list(Paths.get(optionSet.valueOf(backupDir))).filter(Files::isRegularFile).map(Path::toString)
+                  .collect(Collectors.toList())
                   : null))
           .destination(optionSet.valueOf(destination))
           .preSql(optionSet.valueOf(preSql))
@@ -170,7 +171,7 @@ public class Main {
             exit(1);
           })
           .blockingAwait();
-      System.out.println("Elapsed time: "+(System.nanoTime() - start) / 1000000000+" seconds");
+      System.out.println("Elapsed time: " + (System.nanoTime() - start) / 1000000000 + " seconds");
 
     } catch (OptionException ex) {
       parser.printHelpOn(System.out);

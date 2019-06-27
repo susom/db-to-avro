@@ -21,7 +21,6 @@ public interface AvroFns {
    *
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
-   * considerably.
    * @param pathPattern filename pattern for query output
    * @return unsaved AvroFile instances
    */
@@ -32,7 +31,6 @@ public interface AvroFns {
    *
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
-   * considerably.
    * @param pathPattern filename pattern for query output
    * @return unsaved AvroFile instances
    */

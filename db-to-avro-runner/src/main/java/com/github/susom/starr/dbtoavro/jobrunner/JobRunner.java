@@ -31,6 +31,11 @@ import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
 import java.io.File;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,9 +94,8 @@ public class JobRunner {
           .toList()
           .doOnSuccess(avro -> {
             job.avro = avro;
-            try (PrintStream ps = new PrintStream(job.destination + File.separator + outputFile)) {
-              ps.println(gson.toJson(job));
-            }
+            Path output = Paths.get(job.destination + File.separator + outputFile);
+            Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
             LOGGER.info("Wrote output to {}", outputFile);
           })
           .ignoreElement();

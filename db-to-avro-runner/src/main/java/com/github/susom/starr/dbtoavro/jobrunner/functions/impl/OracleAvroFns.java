@@ -53,7 +53,6 @@ public class OracleAvroFns implements AvroFns {
         paths.addAll(Etl.saveQuery(
             db.get().toSelect(query.sql))
             .asAvro(query.path, query.table.schema, query.table.name)
-            .withCodec(CodecFactory.snappyCodec())
             .withCodec(codec)
             .fetchSize(fetchSize)
             .withTidy(tidy)
@@ -63,7 +62,6 @@ public class OracleAvroFns implements AvroFns {
         Etl.saveQuery(
             db.get().toSelect(query.sql))
             .asAvro(query.path, query.table.schema, query.table.name)
-            .withCodec(CodecFactory.snappyCodec())
             .withCodec(codec)
             .fetchSize(fetchSize)
             .withTidy(tidy)
@@ -84,7 +82,7 @@ public class OracleAvroFns implements AvroFns {
     // Only dump the supported column types
     String columns = table.columns.stream()
         .filter(c -> c.serializable)
-        .map(c -> "\""+c.name+"\"")
+        .map(c -> "\"" + c.name + "\"")
         .collect(Collectors.joining(", "));
 
     String sql = String
@@ -130,7 +128,7 @@ public class OracleAvroFns implements AvroFns {
     // Only dump the supported column types
     String columns = table.columns.stream()
         .filter(c -> c.serializable)
-        .map(c -> "\""+c.name+"\"")
+        .map(c -> "\"" + c.name + "\"")
         .collect(Collectors.joining(", "));
 
     int partitions = (int) (table.bytes / targetSize);
@@ -165,7 +163,7 @@ public class OracleAvroFns implements AvroFns {
                   .replace("%{CATALOG}", "ANY")
                   .replace("%{SCHEMA}", tidy(table.schema))
                   .replace("%{TABLE}", tidy(table.name))
-                  .replace("%{PART}", String.format("%03d", part++));
+                  .replace("%{PART}", String.format(Locale.CANADA, "%03d", part++));
               queries.add(new Query(table, String.join(" UNION ALL ", subQueries), 0, path));
               subQueries.clear();
             }
@@ -177,7 +175,7 @@ public class OracleAvroFns implements AvroFns {
                 .replace("%{CATALOG}", "ANY")
                 .replace("%{SCHEMA}", tidy(table.schema))
                 .replace("%{TABLE}", tidy(table.name))
-                .replace("%{PART}", String.format("%03d", part));
+                .replace("%{PART}", String.format(Locale.CANADA, "%03d", part));
             queries.add(new Query(table, String.join(" UNION ALL ", subQueries), 0, path));
           }
           return queries;
@@ -190,7 +188,7 @@ public class OracleAvroFns implements AvroFns {
           .replaceAll("[^a-zA-Z0-9]", " ")
           .replaceAll("\\s", "_")
           .trim()
-          .toLowerCase();
+          .toLowerCase(Locale.CANADA);
     } else {
       return name;
     }

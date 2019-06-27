@@ -8,6 +8,7 @@ import io.reactivex.Observable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,10 +32,10 @@ public class OracleDockerFns extends DockerFns {
     }
     return dockerService.exec(containerId,
         "impdp",
-        String.format("userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
+        String.format(Locale.CANADA, "userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
         (impdpThreads > 0) ? "PARALLEL=" + impdpThreads : "",
-        "PARFILE=/backup/"+backupFiles.get(0)
+        "PARFILE=/backup/" + backupFiles.get(0)
     );
   }
 
@@ -47,9 +48,9 @@ public class OracleDockerFns extends DockerFns {
     dockerService.createFileFromString(containerId, filename, query);
     return dockerService.exec(containerId,
         "sqlplus", "-s",
-        String.format("%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
+        String.format(Locale.CANADA, "%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
-        String.format("@/%s", filename)
+        String.format(Locale.CANADA, "@/%s", filename)
     );
   }
 

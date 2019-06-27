@@ -48,7 +48,7 @@ public abstract class DatabaseFns {
    * @param containerId running database
    * @return database object
    */
-  abstract public Single<Database> getDatabase(String containerId);
+  public abstract Single<Database> getDatabase(String containerId);
 
   /**
    * Get schemas in catalog
@@ -56,7 +56,7 @@ public abstract class DatabaseFns {
    * @param catalog catalog to query
    * @return observable of schemas
    */
-  abstract public Observable<String> getSchemas(String catalog);
+  public abstract Observable<String> getSchemas(String catalog);
 
   /**
    * Get tables in a schema
@@ -65,7 +65,7 @@ public abstract class DatabaseFns {
    * @param schema schema to query
    * @return observable of catalogs
    */
-  abstract public Observable<String> getTables(String catalog, String schema);
+  public abstract Observable<String> getTables(String catalog, String schema);
 
   /**
    * Introspects a database table, required for selecting the appropriate splitting and exporting method.
@@ -76,9 +76,9 @@ public abstract class DatabaseFns {
    * @param filters filter definitions
    * @return observable of table with row counts, byte sizes, and supported column information
    */
-  abstract public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters);
+  public abstract Observable<Table> introspect(String catalog, String schema, String table, List<String> filters);
 
-  abstract public Single<String> getRestoreSql(String catalog, List<String> backupFiles);
+  public abstract Single<String> getRestoreSql(String catalog, List<String> backupFiles);
 
   /**
    * Executes contents of an SQL file
@@ -87,9 +87,11 @@ public abstract class DatabaseFns {
    * @return completable status
    */
   public Completable transactFile(File file) {
-    if (file == null) return Completable.complete();
+    if (file == null) {
+      return Completable.complete();
+    }
     return dbb.transactRx(db -> {
-      Scanner scanner = new Scanner(file).useDelimiter(";");
+      Scanner scanner = new Scanner(file, "UTF-8").useDelimiter(";");
       while (scanner.hasNext()) {
         String statement = scanner.next() + ";";
         LOGGER.debug("Pre-SQL: {}", statement);

@@ -21,12 +21,14 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.impl.DockerServiceImpl;
+import com.google.common.base.Charsets;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.exceptions.Exceptions;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.util.List;
 
@@ -130,7 +132,7 @@ public abstract class DockerFns {
    * @param query SQL query to run (should be a simple query)
    * @return an observable with the console output of sqlcmd
    */
-  abstract public Observable<ConsoleOutput> execSqlShell(final String containerId, final String query);
+  public abstract Observable<ConsoleOutput> execSqlShell(final String containerId, final String query);
 
   /**
    * Executes an SQL file by calling the native command-line utility inside the docker container. Used for database
@@ -146,7 +148,7 @@ public abstract class DockerFns {
     }
     String contents = null;
     try {
-      contents = new String(Files.readAllBytes(inputFile.toPath()));
+      contents = new String(Files.readAllBytes(inputFile.toPath()), Charset.defaultCharset());
     } catch (IOException ex) {
       Exceptions.propagate(ex);
     }
@@ -159,13 +161,13 @@ public abstract class DockerFns {
    * @param containerId containerId where SQL server is running
    * @return completable, complete if SQL server is up and running
    */
-  abstract public Completable healthCheck(final String containerId);
+  public abstract Completable healthCheck(final String containerId);
 
   /**
    * Returns database container image name appropriate for the implementation
    *
    * @return docker container image name
    */
-  abstract public String getImage();
+  public abstract String getImage();
 
 }

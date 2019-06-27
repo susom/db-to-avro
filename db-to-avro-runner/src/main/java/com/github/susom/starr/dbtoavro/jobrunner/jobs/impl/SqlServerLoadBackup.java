@@ -59,7 +59,7 @@ public class SqlServerLoadBackup implements Loader {
 
     // Mount the backup source directory to /backup on the docker container
     List<String> mounts = new ArrayList<>();
-    mounts.add(new File(job.backupDir) + ":"+config.getString("container.backupdir", "/backup"));
+    mounts.add(new File(job.backupDir) + ":" + config.getString("container.backupdir", "/backup"));
     List<String> ports = Arrays.asList(config.getString("sqlserver.ports", "1433:1433").split("\\s*,\\s*"));
 
     docker = FnFactory.getDockerFns(job.flavor, config);
