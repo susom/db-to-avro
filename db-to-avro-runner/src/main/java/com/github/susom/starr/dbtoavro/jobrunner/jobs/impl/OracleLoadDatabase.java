@@ -20,7 +20,7 @@ package com.github.susom.starr.dbtoavro.jobrunner.jobs.impl;
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
-import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Single;
@@ -30,19 +30,19 @@ import org.slf4j.LoggerFactory;
 /**
  * Loads an (already) running SQL server instance
  */
-public class SqlServerLoadExisting implements Loader {
+public class OracleLoadDatabase implements Loader {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerLoadExisting.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(OracleLoadDatabase.class);
 
-  private SqlServerDatabaseFns db;
+  private OracleDatabaseFns db;
 
-  public SqlServerLoadExisting(Config config, DatabaseProviderRx.Builder dbb) {
-    this.db = new SqlServerDatabaseFns(config, dbb);
+  public OracleLoadDatabase(Config config, DatabaseProviderRx.Builder dbb) {
+    this.db = new OracleDatabaseFns(config, dbb);
   }
 
   @Override
   public Single<Database> run(Job job) {
-    LOGGER.info("Using existing sql server database");
+    LOGGER.info("Using existing Oracle server database");
     return
         db.transactFile(job.postSql)
             .doOnComplete(() -> LOGGER.info("Database post-sql completed"))

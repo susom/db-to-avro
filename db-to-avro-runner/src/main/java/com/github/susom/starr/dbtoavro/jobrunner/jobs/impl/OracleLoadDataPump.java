@@ -9,6 +9,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
 import io.reactivex.Single;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -35,6 +36,7 @@ public class OracleLoadDataPump implements Loader {
     LOGGER.info("Starting Oracle data pump restore");
 
     List<String> mounts = new ArrayList<>();
+    mounts.add(new File(job.backupDir) + ":/backup");
     if (config.getString("oracle.mounts") != null) {
       mounts.addAll(Arrays.asList(config.getStringOrThrow("oracle.mounts").split("\\s*,\\s*")));
     }

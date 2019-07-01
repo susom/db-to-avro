@@ -83,7 +83,7 @@ public class Main {
         .requiredUnless(connection)
         .withRequiredArg();
     OptionSpec<String> backupFiles = parser
-        .accepts("backup-files", "comma-delimited list of backup files, or a single .par file")
+        .accepts("backup-files", "comma-delimited list of .bak files (MSSQL), or a single .par file (Oracle)")
         .requiredIf(backupDir)
         .availableUnless(connection)
         .withRequiredArg()
@@ -191,18 +191,9 @@ public class Main {
     Config subs = ConfigFrom.firstOf().value("UUID", uuid.substring(0, 18)).get();
     LOGGER.debug("UUID: {}", subs.getString("UUID"));
 
-    // Create a tempdir we can map into the running container
-    String temp = "/tmp";
-    try {
-      temp = Files.createTempDirectory("db-to-avro").toAbsolutePath().toString();
-    } catch (IOException ex) {
-      Exceptions.propagate(ex);
-    }
-    LOGGER.debug("Host temporary directory is {}", temp);
-
     return Config.from()
-        .value("host.tempdir", temp)
-        .systemProperties().propertyFile(properties.split(File.pathSeparator))
+        .propertyFile(properties.split(File.pathSeparator))
+        .systemProperties()
         .substitutions(subs).get();
   }
 

@@ -22,15 +22,14 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.AvroExporter;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.OracleLoadDataPump;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.OracleLoadExisting;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.OracleLoadDatabase;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadBackup;
-import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadExisting;
+import com.github.susom.starr.dbtoavro.jobrunner.jobs.impl.SqlServerLoadDatabase;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
 import java.io.File;
-import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,14 +73,14 @@ public class JobRunner {
         if (job.connection == null) {
           loader = new SqlServerLoadBackup(config, dbb);
         } else {
-          loader = new SqlServerLoadExisting(config, dbb);
+          loader = new SqlServerLoadDatabase(config, dbb);
         }
         break;
       case oracle:
         if (job.connection == null) {
           loader = new OracleLoadDataPump(config, dbb);
         } else {
-          loader = new OracleLoadExisting(config, dbb);
+          loader = new OracleLoadDatabase(config, dbb);
         }
         break;
       default:
