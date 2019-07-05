@@ -101,8 +101,6 @@ public class DockerServiceImpl implements DockerService {
                     .withNetworkMode("db-to-avro"))
             .withIpv4Address("10.10.10.100")
             .withVolumes(volumes)
-            .withName("database")
-            .withHostName("database")
             .withEnv(env.toArray(new String[0]))
             .withLabels(new HashMap<String, String>() {
                           {

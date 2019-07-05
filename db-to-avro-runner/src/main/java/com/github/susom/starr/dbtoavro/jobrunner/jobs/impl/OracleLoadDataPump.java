@@ -8,6 +8,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
+import io.reactivex.Completable;
 import io.reactivex.Single;
 import java.io.File;
 import java.util.ArrayList;
@@ -68,6 +69,11 @@ public class OracleLoadDataPump implements Loader {
             )
     );
 
+  }
+
+  @Override
+  public Completable stop(Database database) {
+    return new OracleDockerFns(config).stop(database.containerId);
   }
 
 }

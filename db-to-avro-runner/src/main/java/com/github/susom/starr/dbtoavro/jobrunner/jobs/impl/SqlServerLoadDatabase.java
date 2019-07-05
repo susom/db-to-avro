@@ -23,6 +23,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
+import io.reactivex.Completable;
 import io.reactivex.Single;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,11 @@ public class SqlServerLoadDatabase implements Loader {
         db.transactFile(job.postSql)
             .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
             .andThen(db.getDatabase(null));
+  }
+
+  @Override
+  public Completable stop(Database database) {
+    return Completable.complete();
   }
 
 }

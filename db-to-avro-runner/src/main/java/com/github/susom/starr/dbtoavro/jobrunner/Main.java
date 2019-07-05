@@ -25,10 +25,10 @@ import com.github.susom.database.ConfigFrom;
 import com.github.susom.database.Flavor;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job.Builder;
-import io.reactivex.exceptions.Exceptions;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -76,8 +76,10 @@ public class Main {
     OptionSpec<String> user = parser.accepts("user", "database user (existing db)")
         .requiredIf(connection)
         .withRequiredArg();
+    OptionSpec<File> passwordFile = parser.accepts("password-file", "database password file (existing db)")
+        .withRequiredArg()
+        .ofType(File.class);
     OptionSpec<String> password = parser.accepts("password", "database password (existing db)")
-        .requiredIf(connection)
         .withRequiredArg();
     OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore")
         .requiredUnless(connection)
@@ -146,12 +148,18 @@ public class Main {
             .value("database.user", config.getString(job.flavor + ".database.user"))
             .value("database.password", config.getString(job.flavor + ".database.password")).get();
       } else {
-        config = Config.from()
+        ConfigFrom conf = Config.from()
             .config(config)
             .value("database.url", optionSet.valueOf(connection))
-            .value("database.user", optionSet.valueOf(user))
-            .value("database.password", optionSet.valueOf(password))
-            .get();
+            .value("database.user", optionSet.valueOf(user));
+        if (optionSet.valueOf(password) != null) {
+          conf = conf.value("database.password", optionSet.valueOf(password));
+        }
+        if (optionSet.valueOf(passwordFile) != null) {
+          String pass = new String(Files.readAllBytes(optionSet.valueOf(passwordFile).toPath()), Charset.defaultCharset());
+          conf = conf.value("database.password", pass);
+        }
+        config = conf.get();
       }
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());

@@ -143,16 +143,18 @@ avro.core.multiplier=0.75
 
 Currently the application consists of a single module "db-to-avro-runner". More modules in the future can be added to call this runner from a REST API, Pubsub queue, etc.
 
-### TODO
+### TODO, in order of priority:
 
-* Ability to split based on number of rows, not just table bytes
-* Pre/post scripts should simply be in the mounted backup directory, not copied into the container.
-* Flag for mount point for database container, instead of using .properties file(?)
+* Resume features:
+  * Cancelled/crashed jobs should resume at last table exported
+  * Option: if destination file exists, don't export that table
 * Option to save directly to a GCS bucket
 * Support for regex in schema/table/column exclusion filters
+* Use temp files when writing to disk, rename to final name when complete.
+* Schema introspection should be able to exclude tables that will cause problems like '?' in column name
+
 * db-goodies ETL needs to return number of rows written
   * Validation: Number of rows in database should match number of rows written by db-goodies ETL
-* Resume feature: cancelled/crashed jobs should resume at last table exported
 * Automation
   - Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
   - Job runner that reads VM metadata for job input (?)
@@ -162,10 +164,9 @@ Currently the application consists of a single module "db-to-avro-runner". More 
   * Deleting docker container after successful export
   * Listing catalogs, schemas, and tables
   * Testing connection to db
-
 * Unit tests(!)
 
 ### Known Issues
-* Table and column names are normalized in db-goodies ETL, which is not returned in job output log.
-* SQL server is single-threaded (per-table) and is much slower than Oracle
+* Table and column names are normalized in db-goodies ETL, which is not reflected in job output log.
+* SQL server is single-threaded (per-table) and is much slower than Oracle (this may not be addressable)
 * Excluded tables are not explicitly noted in job output (they just aren't listed)

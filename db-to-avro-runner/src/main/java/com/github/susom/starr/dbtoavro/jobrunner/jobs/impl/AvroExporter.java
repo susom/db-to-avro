@@ -78,6 +78,7 @@ public class AvroExporter implements Exporter {
                   );
         })
         .doOnComplete(dbPoolSched::shutdown);
+
   }
 
 }

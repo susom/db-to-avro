@@ -22,10 +22,13 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.FnFactory;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDatabaseFns;
+import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.SqlServerDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
+import io.reactivex.Completable;
 import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
 import java.io.File;
@@ -62,7 +65,7 @@ public class SqlServerLoadBackup implements Loader {
     mounts.add(new File(job.backupDir) + ":/backup");
     List<String> ports = Arrays.asList(config.getString("sqlserver.ports", "1433:1433").split("\\s*,\\s*"));
 
-    docker = FnFactory.getDockerFns(job.flavor, config);
+    docker = new SqlServerDockerFns(config);
 
     return docker.create(mounts, ports).flatMap(containerId ->
         docker.start(containerId)
@@ -85,6 +88,11 @@ public class SqlServerLoadBackup implements Loader {
                 .doFinally(() -> LOGGER.info("Database introspection complete"))
             )
     );
+  }
+
+  @Override
+  public Completable stop(Database database) {
+    return new SqlServerDockerFns(config).stop(database.containerId);
   }
 
 }

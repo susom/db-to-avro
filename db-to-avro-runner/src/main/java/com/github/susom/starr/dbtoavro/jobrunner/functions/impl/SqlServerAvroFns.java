@@ -43,27 +43,24 @@ public class SqlServerAvroFns implements AvroFns {
       String startTime = DateTime.now().toString();
       db.get().underlyingConnection().setCatalog(query.table.catalog);
 
+
+      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(query.sql))
+          .asAvro(query.path, query.table.schema, query.table.name)
+          .withCodec(CodecFactory.snappyCodec())
+          .withCodec(codec)
+          .fetchSize(fetchSize);
+
+      if (tidy) {
+        avro = avro.tidyNames();
+      }
+
       List<String> paths = new ArrayList<>();
       if (query.rowsPerFile > 0) {
         LOGGER.info("Writing {}", query.path);
-        paths.addAll(Etl.saveQuery(
-            db.get().toSelect(query.sql))
-            .asAvro(query.path, query.table.schema, query.table.name)
-            .withCodec(CodecFactory.snappyCodec())
-            .withCodec(codec)
-            .fetchSize(fetchSize)
-            .withTidy(tidy)
-            .start(query.rowsPerFile));
+        paths.addAll(avro.start(query.rowsPerFile));
       } else {
         LOGGER.info("Writing {}", query.path);
-        Etl.saveQuery(
-            db.get().toSelect(query.sql))
-            .asAvro(query.path, query.table.schema, query.table.name)
-            .withCodec(CodecFactory.snappyCodec())
-            .withCodec(codec)
-            .fetchSize(fetchSize)
-            .withTidy(tidy)
-            .start();
+        avro.start();
         paths.add(query.path);
       }
 
@@ -84,7 +81,7 @@ public class SqlServerAvroFns implements AvroFns {
         .collect(Collectors.joining(", "));
 
     String sql = String
-        .format(Locale.CANADA, "SELECT %s FROM %s.%s WITH (NOLOCK)", columns, table.schema,
+        .format(Locale.CANADA, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
             table.name);
 
     String path;

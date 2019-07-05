@@ -92,6 +92,7 @@ public class JobRunner {
       return new AvroExporter(config, dbb).run(job, loader)
           .toList()
           .doOnSuccess(avro -> {
+            // TODO: loader.stop()
             job.avro = avro;
             Path output = Paths.get(job.destination + File.separator + outputFile);
             Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
