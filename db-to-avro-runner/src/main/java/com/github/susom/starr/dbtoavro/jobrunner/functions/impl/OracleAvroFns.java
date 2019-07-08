@@ -8,6 +8,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Query;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
+import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import java.io.File;
 import java.util.ArrayList;
@@ -130,7 +131,6 @@ public class OracleAvroFns implements AvroFns {
         .collect(Collectors.joining(", "));
 
     int partitions = (int) (table.bytes / targetSize);
-
     return getSegments(table, (partitions * 2) + 1)
         .map(segments -> {
 
@@ -177,7 +177,9 @@ public class OracleAvroFns implements AvroFns {
             queries.add(new Query(table, String.join(" UNION ALL ", subQueries), 0, path));
           }
           return queries;
-        }).flatMapIterable(l -> l);
+        }).toObservable()
+        .flatMapIterable(l -> l);
+
   }
 
   private String tidy(final String name) {
@@ -192,7 +194,7 @@ public class OracleAvroFns implements AvroFns {
     }
   }
 
-  private Observable<List<Segment>> getSegments(final Table table, int batches) {
+  private Maybe<List<Segment>> getSegments(final Table table, int batches) {
     return dbb.withConnectionAccess().transactRx(db -> {
       db.get().underlyingConnection().setSchema(table.schema);
 
@@ -249,12 +251,17 @@ public class OracleAvroFns implements AvroFns {
           rs.getIntegerOrZero("FILE_BATCH")
       ));
 
+      if (segments.size() == 0) {
+        LOGGER.warn("Cannot split table {} (index-organized?)", table.name);
+        return null; // Want an empty Maybe, not a Maybe containing an empty list
+      }
+
       // The blocks get larger for each segment, we randomize so the file sizes are more consistent.
       Collections.shuffle(segments);
 
       return segments;
 
-    }).toObservable();
+    });
 
   }
 
