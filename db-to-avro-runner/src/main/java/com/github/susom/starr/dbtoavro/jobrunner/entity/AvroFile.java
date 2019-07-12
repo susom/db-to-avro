@@ -3,22 +3,24 @@ package com.github.susom.starr.dbtoavro.jobrunner.entity;
 import java.util.List;
 
 /**
- * Simple pojo representing the result of running a query
+ * Simple pojo representing a table exported as one or more avro files
  */
 public class AvroFile {
 
   public Query query;
-  public List<String> output;
+  public List<String> files;
   public String startTime;
   public String endTime;
   public long bytes;
+  public long rows;
 
-  public AvroFile(Query query, List<String> output, String startTime, String endTime, long bytes) {
+  public AvroFile(Query query, List<String> files, String startTime, String endTime, long bytes, long rows) {
     this.query = query;
-    this.output = output;
+    this.files = files;
     this.startTime = startTime;
     this.endTime = endTime;
     this.bytes = bytes;
+    this.rows = rows;
   }
 
 }

@@ -17,25 +17,26 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
+import com.github.dockerjava.api.model.Container;
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.DockerService;
 import com.github.susom.starr.dbtoavro.jobrunner.docker.impl.DockerServiceImpl;
-import com.google.common.base.Charsets;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.exceptions.Exceptions;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.util.List;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Manages an database container that is running in docker
  */
 public abstract class DockerFns {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(DockerFns.class);
 
   protected Config config;
   protected DockerService dockerService;
@@ -73,7 +74,7 @@ public abstract class DockerFns {
         this.dockerService.startContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        Exceptions.propagate(ex);
+        emitter.onError(ex);
       }
     });
   }
@@ -90,7 +91,7 @@ public abstract class DockerFns {
         this.dockerService.stopContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        Exceptions.propagate(ex);
+        emitter.onError(ex);
       }
     });
   }
@@ -107,18 +108,18 @@ public abstract class DockerFns {
         this.dockerService.removeContainer(containerId);
         emitter.onComplete();
       } catch (Exception ex) {
-        Exceptions.propagate(ex);
+        emitter.onError(ex);
+
       }
     });
   }
-
 
   /**
    * Execute a program within a container
    *
    * @param containerId container ID
    * @param cmd program and parameters
-   * @return observable of program output
+   * @return observable of program files
    */
   public Observable<ConsoleOutput> exec(final String containerId, final String... cmd) {
     return dockerService.exec(containerId, cmd);
@@ -126,42 +127,67 @@ public abstract class DockerFns {
 
   /**
    * Executes an SQL statement by calling the native command-line utility inside the docker container. Used for database
-   * restores.
+   * restores. Path is the path *inside* the container.
    *
    * @param containerId containerId where SQL server is running
-   * @param query SQL query to run (should be a simple query)
-   * @return an observable with the console output of sqlcmd
+   * @param path fully qualified path of SQL file to execute
+   * @return an observable with the console files of sqlcmd
    */
-  public abstract Observable<ConsoleOutput> execSqlShell(final String containerId, final String query);
+  public abstract Observable<ConsoleOutput> execSqlFile(final String containerId, final String path);
 
   /**
-   * Executes an SQL file by calling the native command-line utility inside the docker container. Used for database
+   * Executes an SQL statement by calling the native command-line utility inside the docker container. Used for database
    * restores.
    *
    * @param containerId containerId where SQL server is running
-   * @param inputFile SQL file to execute
-   * @return an observable with the console output of sqlcmd
+   * @param sql SQL to execute
+   * @return an observable with the console files of sqlcmd
    */
-  public Observable<ConsoleOutput> execSqlShell(final String containerId, File inputFile) {
-    if (inputFile == null) {
-      return Observable.empty();
-    }
-    String contents = null;
-    try {
-      contents = new String(Files.readAllBytes(inputFile.toPath()), Charset.defaultCharset());
-    } catch (IOException ex) {
-      Exceptions.propagate(ex);
-    }
-    return execSqlShell(containerId, contents);
+  public abstract Observable<ConsoleOutput> execSql(final String containerId, final String sql);
+
+  /**
+   * Checks if a container is running
+   *
+   * @param containerId containerId
+   * @return completable, complete if container is running
+   */
+  public Single<Boolean> isRunning(final String containerId) {
+    return Single.create(emitter -> {
+      try {
+        boolean status = dockerService.listContainers().stream().anyMatch(c -> c.getId().equals(containerId));
+        LOGGER.debug("Container {} running: {}", containerId.substring(0, 12), status);
+        emitter.onSuccess(dockerService.listContainers().stream().anyMatch(c -> c.getId().equals(containerId)));
+      } catch (Exception ex) {
+        emitter.onError(ex);
+      }
+    });
   }
 
   /**
-   * Returns a successful completable if the database container is up and running
+   * Checks if a container is running and healthy
    *
-   * @param containerId containerId where SQL server is running
-   * @return completable, complete if SQL server is up and running
+   * @param containerId containerId
+   * @return completable, complete if container is running
    */
-  public abstract Completable healthCheck(final String containerId);
+  public Single<Boolean> isHealthy(final String containerId) {
+    return Single.create(emitter -> {
+      try {
+        List<Container> containers = dockerService.listContainers();
+        for (Container container : containers) {
+          if (container.getId().equals(containerId)) {
+            String state = container.getStatus();
+            LOGGER.debug("Container {} {}", containerId.substring(0, 12), state);
+            if (state.contains("healthy") || state.contains("Up")) {
+              emitter.onSuccess(Boolean.TRUE);
+            }
+          }
+        }
+        emitter.onSuccess(Boolean.FALSE);
+      } catch (Exception ex) {
+        emitter.onError(ex);
+      }
+    });
+  }
 
   /**
    * Returns database container image name appropriate for the implementation

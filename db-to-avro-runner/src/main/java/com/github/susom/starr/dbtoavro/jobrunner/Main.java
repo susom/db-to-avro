@@ -81,7 +81,7 @@ public class Main {
         .ofType(File.class);
     OptionSpec<String> password = parser.accepts("password", "database password (existing db)")
         .withRequiredArg();
-    OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore")
+    OptionSpec<String> backupDir = parser.accepts("backup-dir", "directory containing backup to restore, mounted as /backup in container")
         .requiredUnless(connection)
         .withRequiredArg();
     OptionSpec<String> backupFiles = parser
@@ -105,10 +105,12 @@ public class Main {
         .withRequiredArg()
         .ofType(String.class)
         .withValuesSeparatedBy(',');
-    OptionSpec<File> preSql = parser.accepts("pre-sql", "path of sql file to execute before restore/connect")
-        .withRequiredArg().ofType(File.class);
-    OptionSpec<File> postSql = parser.accepts("post-sql", "path of sql file to execute after restore/connect")
-        .withRequiredArg().ofType(File.class);
+    OptionSpec<String> preSql = parser.accepts("pre-sql", "path of sql file to execute before restore")
+        .availableUnless(connection)
+        .withRequiredArg();
+    OptionSpec<String> postSql = parser.accepts("post-sql", "path of sql file to execute after restore")
+        .availableUnless(connection)
+        .withRequiredArg();
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
     try {
@@ -182,6 +184,7 @@ public class Main {
       System.out.println("Elapsed time: " + (System.nanoTime() - start) / 1000000000 + " seconds");
 
     } catch (OptionException ex) {
+      System.out.println(ex.getMessage());
       parser.printHelpOn(System.out);
       exit(1);
     } catch (Exception ex) {

@@ -21,7 +21,7 @@ public interface AvroFns {
    *
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
-   * @param pathPattern filename pattern for query output
+   * @param pathPattern filename pattern for query files
    * @return unsaved AvroFile instances
    */
   Observable<Query> optimizedQuery(final Table table, final long targetSize, final String pathPattern);
@@ -31,7 +31,7 @@ public interface AvroFns {
    *
    * @param table table to split
    * @param targetSize Split the table into partitions of targetSize bytes. Compression may reduce actual file size
-   * @param pathPattern filename pattern for query output
+   * @param pathPattern filename pattern for query files
    * @return unsaved AvroFile instances
    */
   Observable<Query> query(final Table table, final long targetSize, final String pathPattern);

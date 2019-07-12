@@ -23,6 +23,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.entity.Job;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
+import com.github.susom.starr.dbtoavro.jobrunner.util.RepeatWithDelay;
 import io.reactivex.Completable;
 import io.reactivex.Single;
 import org.slf4j.Logger;
@@ -45,13 +46,15 @@ public class OracleLoadDatabase implements Loader {
   public Single<Database> run(Job job) {
     LOGGER.info("Using existing Oracle server database");
     return
-        db.transactFile(job.postSql)
-            .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
+        db.isValid()
+            .repeatWhen(new RepeatWithDelay(24, 5000))
+            .takeWhile(b -> b.equals(false))
+            .ignoreElements()
             .andThen(db.getDatabase(null));
   }
 
   @Override
-  public Completable stop(Database database) {
+  public Completable stop() {
     return Completable.complete();
   }
 

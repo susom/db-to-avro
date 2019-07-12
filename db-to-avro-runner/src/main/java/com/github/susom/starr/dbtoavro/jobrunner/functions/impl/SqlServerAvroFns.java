@@ -12,6 +12,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.file.CodecFactory;
 import org.joda.time.DateTime;
@@ -55,18 +56,23 @@ public class SqlServerAvroFns implements AvroFns {
       }
 
       List<String> paths = new ArrayList<>();
-      if (query.rowsPerFile > 0) {
+      long rows = 0;
+      if (query.batchSize > 0) {
         LOGGER.info("Writing {}", query.path);
-        paths.addAll(avro.start(query.rowsPerFile));
+        Map<String, Long> output = avro.start(query.batchSize);
+        for (Map.Entry<String, Long> entry : output.entrySet()) {
+          paths.add(entry.getKey());
+          rows += entry.getValue();
+        }
       } else {
         LOGGER.info("Writing {}", query.path);
-        avro.start();
+        rows = avro.start();
         paths.add(query.path);
       }
 
       String endTime = DateTime.now().toString();
 
-      return new AvroFile(query, paths, startTime, endTime, new File(query.path).length());
+      return new AvroFile(query, paths, startTime, endTime, new File(query.path).length(), rows);
 
     }).toObservable();
   }
@@ -136,7 +142,7 @@ public class SqlServerAvroFns implements AvroFns {
           .map(c -> "[" + c.name + "]")
           .collect(Collectors.joining(", "));
 
-      // Estimate how many rows it will take to reach the target file size for avro output
+      // Estimate how many rows it will take to reach the target file size for avro files
       long partitionSize = (targetSize) / (table.bytes / table.rows);
 
       String primaryKeys = table.columns.stream()

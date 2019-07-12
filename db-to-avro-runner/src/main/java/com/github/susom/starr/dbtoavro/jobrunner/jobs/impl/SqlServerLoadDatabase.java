@@ -44,14 +44,11 @@ public class SqlServerLoadDatabase implements Loader {
   @Override
   public Single<Database> run(Job job) {
     LOGGER.info("Using existing sql server database");
-    return
-        db.transactFile(job.postSql)
-            .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
-            .andThen(db.getDatabase(null));
+    return db.getDatabase(null);
   }
 
   @Override
-  public Completable stop(Database database) {
+  public Completable stop() {
     return Completable.complete();
   }
 

@@ -17,6 +17,7 @@
 
 package com.github.susom.starr.dbtoavro.jobrunner.docker;
 
+import com.github.dockerjava.api.model.Container;
 import io.reactivex.Observable;
 import java.io.File;
 import java.util.List;
@@ -49,7 +50,12 @@ public interface DockerService {
   void removeContainer(String containerId);
 
   /**
-   * Executes a command within the provided container, returning an observable watching the output. Observable completes
+   * Gets list of running containers
+   */
+  List<Container> listContainers();
+
+  /**
+   * Executes a command within the provided container, returning an observable watching the files. Observable completes
    * when command exits.
    * @param containerId containerId to execute commands
    * @param cmd command to pass to container
@@ -61,7 +67,7 @@ public interface DockerService {
    * @param containerId containerId for logs
    * @param follow keep following logs
    * @param numberOfLines number of lines to retrieve
-   * @return observable of notify output
+   * @return observable of notify files
    */
   Observable<ConsoleOutput> logs(String containerId, boolean follow, int numberOfLines);
 

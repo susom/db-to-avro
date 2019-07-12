@@ -44,7 +44,7 @@ public class ConsoleOutput {
   }
 
   /**
-   * Looks for 'xx percent' in the current line, returns that value, otherwise -1. Useful for following the output
+   * Looks for 'xx percent' in the current line, returns that value, otherwise -1. Useful for following the files
    * of long-running commands that print "xx percent complete"
    *
    * @return percent value found in the string

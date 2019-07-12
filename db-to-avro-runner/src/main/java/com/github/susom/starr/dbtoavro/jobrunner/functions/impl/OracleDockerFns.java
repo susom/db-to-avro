@@ -5,6 +5,7 @@ import com.github.susom.starr.dbtoavro.jobrunner.docker.ConsoleOutput;
 import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -40,41 +41,28 @@ public class OracleDockerFns extends DockerFns {
   }
 
   /**
-   * {@inheritDoc} Uses sqlplus and a temp file to execute PL/SQL code
+   * {@inheritDoc} Uses sqlplus and a temp file to execute PL/SQL code inside a container
    */
   @Override
-  public Observable<ConsoleOutput> execSqlShell(final String containerId, final String query) {
-    String filename = UUID.randomUUID().toString() + ".sql";
-    dockerService.createFileFromString(containerId, filename, query);
+  public Observable<ConsoleOutput> execSqlFile(final String containerId, final String path) {
+    if (path == null) {
+      return Observable.empty();
+    }
+    LOGGER.debug("Executing SQL in {}", path);
     return dockerService.exec(containerId,
         "sqlplus", "-s",
         String.format(Locale.CANADA, "%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
-        String.format(Locale.CANADA, "@/%s", filename)
+        String.format(Locale.CANADA, "@/%s", path)
     );
   }
 
+  /**
+   * {@inheritDoc} Not implemented, sqlplus cannot execute SQL on the command line
+   */
   @Override
-  public Completable healthCheck(final String containerId) {
-
-    // TODO: make more robust. Need to check for strings
-    // "ORA-12514" (DB not booted)
-    // "ORA-28000" (account is locked) etc.
-
-    List<String> stdout = new ArrayList<>();
-    return execSqlShell(containerId, "SELECT 1 FROM DUAL;")
-        .doOnNext(o -> stdout.add(o.getData()))
-        .filter(p -> p.getData().contains("----------"))
-        .count()
-        .flatMapCompletable(count -> {
-          if (count > 0) {
-            // Database may not actually be 100% done yet, tablespace modifications will fail with ORA-01155
-            Thread.sleep(15000);
-            return Completable.complete();
-          } else {
-            return Completable.error(new Throwable("Failed to connect to database" + String.join("\n", stdout)));
-          }
-        });
+  public Observable<ConsoleOutput> execSql(final String containerId, final String sql) {
+      return Observable.error(new Throwable("Not implemented"));
   }
 
   @Override

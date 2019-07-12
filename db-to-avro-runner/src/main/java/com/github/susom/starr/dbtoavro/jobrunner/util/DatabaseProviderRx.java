@@ -84,7 +84,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
   /**
    * Configure the database from the following properties read from the provided configuration: <br/>
    * <pre>
-   *   database.url=...       Database connect string (required)
+   *   database.url=...       Database isValid string (required)
    *   database.user=...      Authenticate as this user (optional if provided in url)
    *   database.password=...  User password (optional if user and password provided in
    *                          url; prompted on standard input if user is provided and
@@ -198,8 +198,8 @@ public class DatabaseProviderRx implements Supplier<Database> {
           }
         }
         emitter.onComplete();
-      } catch (Throwable ex) {
-        Exceptions.propagate(ex);
+      } catch (Throwable t) {
+        emitter.onError(t);
       }
     });
   }
@@ -230,7 +230,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
         }
         emitter.onComplete();
       } catch (Throwable t) {
-        Exceptions.propagate(t);
+        emitter.onError(t);
       }
     });
   }
@@ -263,7 +263,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           emitter.onComplete();
         }
       } catch (Throwable t) {
-        Exceptions.propagate(t);
+        emitter.onError(t);
       }
     });
   }
@@ -299,7 +299,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           emitter.onComplete();
         }
       } catch (Throwable t) {
-        Exceptions.propagate(t);
+        emitter.onError(t);
       }
     });
   }

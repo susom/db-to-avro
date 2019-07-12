@@ -34,14 +34,14 @@ public class Job {
   public final List<String> schemas;
   public final List<String> tables;
   public final List<String> exclusions;
-  public final File postSql;
-  public final File preSql;
+  public final String postSql;
+  public final String preSql;
   public final Flavor flavor;
   public final String destination;
   public final String connection;
   public final String timezone;
 
-  // Job output
+  // Job files
   public List<AvroFile> avro;
 
   public Job(Builder builder) {
@@ -69,8 +69,8 @@ public class Job {
     private List<String> schemas;
     private List<String> tables;
     private List<String> exclusions;
-    private File postSql;
-    private File preSql;
+    private String postSql;
+    private String preSql;
     private Flavor flavor;
     private String destination;
     private String connection;
@@ -118,12 +118,12 @@ public class Job {
       return this;
     }
 
-    public Builder postSql(File postSql) {
+    public Builder postSql(String postSql) {
       this.postSql = postSql;
       return this;
     }
 
-    public Builder preSql(File preSql) {
+    public Builder preSql(String preSql) {
       this.preSql = preSql;
       return this;
     }

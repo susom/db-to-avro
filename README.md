@@ -145,21 +145,17 @@ Currently the application consists of a single module "db-to-avro-runner". More 
 
 ### TODO, in order of priority:
 
-* Get row counts from Avro generation, instead of DB introspection (which is too slow for billions of rows)
-* The convoluted way of copying files into the container sucks and needs to be replaced by mounts
-  * This means pre/post sql won't work against already running DB's (--connect) and that is OK
-* Ability to restore database into database that is already running in a container (CoS)
 * Pass docker database mounts as command line options in addition to properties file
 * Resume features:
+  * Use temp files when writing to disk, rename to final name when complete.
   * Cancelled/crashed jobs should resume at last table exported
   * Option: if destination file exists, don't export that table
 * Option to save directly to a GCS bucket
 * Support for regex in schema/table/column exclusion filters
-* Use temp files when writing to disk, rename to final name when complete.
+* Get row counts from Avro generation, instead of DB introspection (which is too slow for billions of rows)
+* Ability to restore backup into pre-existing database (eg. from CoS boot creation)
 * Schema introspection should be able to exclude tables that will cause problems like '?' in column name
-
-* db-goodies ETL needs to return number of rows written
-  * Validation: Number of rows in database should match number of rows written by db-goodies ETL
+* Validation: Number of rows in database should match number of rows written by db-goodies ETL
 * Automation
   - Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
   - Job runner that reads VM metadata for job input (?)
@@ -169,6 +165,7 @@ Currently the application consists of a single module "db-to-avro-runner". More 
   * Deleting docker container after successful export
   * Listing catalogs, schemas, and tables
   * Testing connection to db
+* Option for saving output as .avro instead of .json, so manifest is included with the dataset itself.
 * Unit tests(!)
 
 ### Known Issues

@@ -92,16 +92,15 @@ public class JobRunner {
       return new AvroExporter(config, dbb).run(job, loader)
           .toList()
           .doOnSuccess(avro -> {
-            // TODO: loader.stop()
             job.avro = avro;
             Path output = Paths.get(job.destination + File.separator + outputFile);
             Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
-            LOGGER.info("Wrote output to {}", outputFile);
+            LOGGER.info("Wrote files to {}", outputFile);
           })
           .ignoreElement();
     } else {
       LOGGER.info("No destination, not exporting avro");
-      return loader.run(job).ignoreElement();
+      return loader.run(job).ignoreElement().andThen(loader.stop());
     }
 
   }

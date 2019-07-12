@@ -30,6 +30,7 @@ import java.sql.ResultSet;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,15 +144,11 @@ public class OracleDatabaseFns extends DatabaseFns {
           .argString(table)
           .queryLongOrZero();
 
-      // TODO: Re-enable for production. Also need to get Avro #rows written...
-      // Oracle defaults to an insane amount of threads killing the app
-      //      int cores = Runtime.getRuntime().availableProcessors();
-
       // Number of rows
-      //      String sql = String.format(Locale.CANADA, "SELECT /*+ FULL(%1$s) PARALLEL(%1$s, %2$d) */ COUNT(*) FROM %1$s", table, cores);
-      //      long rows = db.get().toSelect(sql).queryLongOrZero();
+      String sql = String.format(Locale.CANADA, "SELECT COUNT(*) FROM %s", table);
+      long rows = db.get().toSelect(sql).queryLongOrZero();
 
-      return new Table(catalog, schema, table, cols, bytes, 0);
+      return new Table(catalog, schema, table, cols, bytes, rows);
 
     }).toObservable();
   }
@@ -180,15 +177,6 @@ public class OracleDatabaseFns extends DatabaseFns {
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);
-  }
-
-  @Override
-  public Single<Database> getDatabase(String containerId) {
-    return dbb.withConnectionAccess().transactRx(db -> {
-      Database database = new Database(containerId);
-      database.flavor = db.get().flavor();
-      return database;
-    }).toSingle();
   }
 
   private boolean isSerializable(int type) {

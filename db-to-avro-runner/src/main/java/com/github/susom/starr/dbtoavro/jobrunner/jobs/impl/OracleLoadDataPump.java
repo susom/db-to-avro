@@ -7,14 +7,13 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDatabaseFn
 import com.github.susom.starr.dbtoavro.jobrunner.functions.impl.OracleDockerFns;
 import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
-import com.github.susom.starr.dbtoavro.jobrunner.util.RetryWithDelay;
+import com.github.susom.starr.dbtoavro.jobrunner.util.RepeatWithDelay;
 import io.reactivex.Completable;
 import io.reactivex.Single;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +24,7 @@ public class OracleLoadDataPump implements Loader {
   private OracleDockerFns docker;
   private OracleDatabaseFns db;
   private Config config;
+  private String containerId;
 
   public OracleLoadDataPump(Config config, DatabaseProviderRx.Builder dbb) {
     this.config = config;
@@ -46,34 +46,42 @@ public class OracleLoadDataPump implements Loader {
 
     docker = new OracleDockerFns(config);
 
-    return docker.create(mounts, ports).flatMap(containerId ->
-        docker.start(containerId)
-            .doOnComplete(() -> LOGGER
-                .info(String.format(Locale.CANADA, "Container %s started, waiting for database to boot", containerId)))
-            .andThen(docker.healthCheck(containerId).retryWhen(new RetryWithDelay(180, 5000)))
-            .andThen(docker.execSqlShell(containerId, job.preSql))
-            .doOnNext(line -> LOGGER.info(line.getData()))
-            .doOnComplete(() -> LOGGER.info("Database pre-sql completed"))
-            .doOnComplete(() -> LOGGER.info("Starting database restore"))
-            .ignoreElements()
-            .andThen(docker.impdp(containerId, job.backupFiles))
-            .doOnNext(line -> LOGGER.info(line.getData()))
-            .ignoreElements()
-            .doOnComplete(() -> LOGGER.info("Restore completed"))
-            .andThen(docker.execSqlShell(containerId, job.postSql)
-                .doOnNext(line -> LOGGER.info(line.getData())))
-            .ignoreElements()
-            .doOnComplete(() -> LOGGER.info("Database post-sql completed"))
-            .andThen(db.getDatabase(containerId)
-                .doFinally(() -> LOGGER.info("Database introspection complete"))
-            )
+    return docker.create(mounts, ports).flatMap(containerId -> {
+          this.containerId = containerId;
+          return docker.start(containerId)
+              .andThen(docker.isRunning(containerId)
+                  .repeatWhen(new RepeatWithDelay(12, 5000))
+                  .takeWhile(b -> b.equals(false)).ignoreElements()
+              )
+              .andThen(docker.isHealthy(containerId)
+                  .repeatWhen(new RepeatWithDelay(60, 5000))
+                  .takeWhile(b -> b.equals(false)).ignoreElements()
+              )
+              .andThen(db.isValid()
+                  .repeatWhen(new RepeatWithDelay(24, 5000))
+                  .takeWhile(b -> b.equals(false)).ignoreElements()
+              )
+              .andThen(docker.execSqlFile(containerId, job.preSql)
+                  .doOnNext(line -> LOGGER.info(line.getData()))
+                  .ignoreElements() // TODO: record output
+              )
+              .andThen(docker.impdp(containerId, job.backupFiles)
+                  .doOnNext(line -> LOGGER.info(line.getData()))
+                  .ignoreElements() // TODO: record output
+              )
+              .andThen(docker.execSqlFile(containerId, job.postSql)
+                  .doOnNext(line -> LOGGER.info(line.getData()))
+                  .ignoreElements() // TODO: record output
+              )
+              .andThen(db.getDatabase(containerId));
+        }
     );
 
   }
 
   @Override
-  public Completable stop(Database database) {
-    return new OracleDockerFns(config).stop(database.containerId);
+  public Completable stop() {
+    return new OracleDockerFns(config).stop(this.containerId);
   }
 
 }

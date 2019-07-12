@@ -21,6 +21,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.command.PingCmd;
 import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
@@ -130,8 +131,15 @@ public class DockerServiceImpl implements DockerService {
   }
 
   @Override
+  public List<Container> listContainers() {
+    return dockerClient.listContainersCmd().exec();
+  }
+
+  @Override
   public Observable<ConsoleOutput> exec(final String containerId, final String... cmd) {
     return Observable.create(emitter -> {
+
+      LOGGER.debug("Executing {} in {}", cmd, containerId.substring(0, 12));
       ExecCreateCmdResponse execCreateCmdResponse =
           dockerClient
               .execCreateCmd(containerId)

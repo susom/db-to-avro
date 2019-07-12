@@ -20,6 +20,6 @@ public interface Loader {
    *
    * @return Completable, or error
    */
-  Completable stop(Database database);
+  Completable stop();
 
 }

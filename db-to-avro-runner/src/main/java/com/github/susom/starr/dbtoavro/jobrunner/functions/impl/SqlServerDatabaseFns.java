@@ -174,15 +174,6 @@ public class SqlServerDatabaseFns extends DatabaseFns {
     }).toObservable().flatMapIterable(l -> l);
   }
 
-  @Override
-  public Single<Database> getDatabase(String containerId) {
-    return dbb.withConnectionAccess().transactRx(db -> {
-      Database database = new Database(containerId);
-      database.flavor = db.get().flavor();
-      return database;
-    }).toSingle();
-  }
-
   /**
    * SQL-server specific function to create the database restore ddl
    *

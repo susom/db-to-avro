@@ -18,6 +18,7 @@
 package com.github.susom.starr.dbtoavro.jobrunner.functions;
 
 import com.github.susom.database.Config;
+import com.github.susom.database.DatabaseException;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Database;
 import com.github.susom.starr.dbtoavro.jobrunner.entity.Table;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
@@ -26,6 +27,7 @@ import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
 import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +50,29 @@ public abstract class DatabaseFns {
    * @param containerId running database
    * @return database object
    */
-  public abstract Single<Database> getDatabase(String containerId);
+  public Single<Database> getDatabase(String containerId) {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      Database database = new Database(containerId);
+      database.flavor = db.get().flavor();
+      return database;
+    }).toSingle();
+  }
+
+  /**
+   * Attempts to isValid to the DB
+   *
+   * @return Single boolean indicating if database connection was successful
+   */
+  public Single<Boolean> isValid() {
+    return dbb.withConnectionAccess().transactRx(db -> {
+      LOGGER.debug("Attempting to connect to database...");
+      try {
+        return db.get().underlyingConnection().isValid(30000);
+      } catch (DatabaseException ex) {
+        return false;
+      }
+    }).toSingle();
+  }
 
   /**
    * Get schemas in catalog

@@ -6,8 +6,12 @@ import com.github.susom.starr.dbtoavro.jobrunner.functions.DockerFns;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SqlServerDockerFns extends DockerFns {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDockerFns.class);
 
   public SqlServerDockerFns(Config config) {
     super(config);
@@ -18,29 +22,36 @@ public class SqlServerDockerFns extends DockerFns {
    * {@inheritDoc} Uses sqlcmd utility
    */
   @Override
-  public Observable<ConsoleOutput> execSqlShell(final String containerId, final String query) {
+  public Observable<ConsoleOutput> execSqlFile(final String containerId, final String path) {
+    if (path == null) {
+      return Observable.empty();
+    }
+    LOGGER.debug("Executing SQL in {}", path);
     return dockerService.exec(containerId,
         "/opt/mssql-tools/bin/sqlcmd",
         "-s", "localhost",
         "-U", config.getString("database.user"),
         "-P", config.getString("database.password"),
-        "-Q", query);
+        "-i", path);
   }
 
+  /**
+   * {@inheritDoc} Uses sqlcmd utility
+   */
   @Override
-  public Completable healthCheck(final String containerId) {
-    return execSqlShell(containerId, "SELECT 1;")
-        .filter(p -> p.getData().contains("1 rows affected"))
-        .count()
-        .flatMapCompletable(count -> {
-          if (count > 0) {
-            return Completable.complete();
-          } else {
-            return Completable.error(new IllegalArgumentException("Health check failed"));
-          }
-        });
-
+  public Observable<ConsoleOutput> execSql(final String containerId, final String sql) {
+    if (sql == null) {
+      return Observable.empty();
+    }
+    LOGGER.debug("Executing SQL in {}", sql);
+    return dockerService.exec(containerId,
+        "/opt/mssql-tools/bin/sqlcmd",
+        "-s", "localhost",
+        "-U", config.getString("database.user"),
+        "-P", config.getString("database.password"),
+        "-q", sql);
   }
+
 
   @Override
   public String getImage() {
