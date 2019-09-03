@@ -1,7 +1,7 @@
 ## Database Backups to Avro
 
 The goal of this project is to load database backups (eg. Oracle datapump exports, MS Sql Server .bak files) into a
-temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems. 
+temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems.
 
 ### Current Progress
 
@@ -84,6 +84,7 @@ Option (* = required)    Description
 --exclude        exclusions in form schema(.table)(.column)
 * --flavor       database type (sqlserver, oracle)
 --password       database password (existing db)
+--password-file  read database password from file (existing db)
 --post-sql       path of sql file to execute after restore/connect
 --pre-sql        path of sql file to execute before restore/connect
 --schemas        only export this comma-delimited list of schemas
@@ -144,6 +145,7 @@ avro.core.multiplier=0.75
 Currently the application consists of a single module "db-to-avro-runner". More modules in the future can be added to call this runner from a REST API, Pubsub queue, etc.
 
 ### TODO, in order of priority:
+
 
 * Pass docker database mounts as command line options in addition to properties file
 * Resume features:

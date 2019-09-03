@@ -39,7 +39,7 @@ public class SqlServerAvroFns implements AvroFns {
 
   @Override
   public Observable<AvroFile> saveAsAvro(final Query query) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
 
       String startTime = DateTime.now().toString();
       db.get().underlyingConnection().setCatalog(query.table.catalog);
@@ -47,7 +47,6 @@ public class SqlServerAvroFns implements AvroFns {
 
       Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(query.sql))
           .asAvro(query.path, query.table.schema, query.table.name)
-          .withCodec(CodecFactory.snappyCodec())
           .withCodec(codec)
           .fetchSize(fetchSize);
 

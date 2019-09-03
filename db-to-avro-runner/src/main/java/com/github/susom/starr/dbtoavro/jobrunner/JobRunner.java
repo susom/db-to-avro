@@ -55,6 +55,7 @@ public class JobRunner {
     this.dbb = DatabaseProviderRx
         .pooledBuilder(config)
         .withSqlInExceptionMessages()
+        .withConnectionAccess()
         .withSqlParameterLogging();
   }
 
@@ -93,7 +94,7 @@ public class JobRunner {
           .toList()
           .doOnSuccess(avro -> {
             job.avro = avro;
-            Path output = Paths.get(job.destination + File.separator + outputFile);
+            Path output = Paths.get(job.destination , outputFile);
             Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
             LOGGER.info("Wrote files to {}", outputFile);
           })

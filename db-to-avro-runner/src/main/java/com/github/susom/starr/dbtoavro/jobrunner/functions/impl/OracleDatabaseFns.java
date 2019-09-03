@@ -69,7 +69,7 @@ public class OracleDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getSchemas(String catalog) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet schemas = metadata.getSchemas(null, null)) {
         List<String> schemasList = new ArrayList<>();
@@ -83,7 +83,7 @@ public class OracleDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       db.get().underlyingConnection().setSchema(schema);
 
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
@@ -163,7 +163,7 @@ public class OracleDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getTables(String catalog, String schema) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       db.get().underlyingConnection().setSchema(schema);
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {

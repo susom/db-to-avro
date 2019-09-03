@@ -52,7 +52,6 @@ public class SqlServerDockerFns extends DockerFns {
         "-q", sql);
   }
 
-
   @Override
   public String getImage() {
     return config.getStringOrThrow("sqlserver.image");

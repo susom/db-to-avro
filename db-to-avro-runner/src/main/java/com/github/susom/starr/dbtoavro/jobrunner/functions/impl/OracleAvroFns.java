@@ -42,7 +42,7 @@ public class OracleAvroFns implements AvroFns {
 
   @Override
   public Observable<AvroFile> saveAsAvro(final Query query) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
 
       db.get().ddl("ALTER SESSION DISABLE PARALLEL QUERY").execute();
       db.get().ddl("ALTER SESSION SET \"_SERIAL_DIRECT_READ\" = TRUE").execute();
@@ -201,7 +201,7 @@ public class OracleAvroFns implements AvroFns {
   }
 
   private Maybe<List<Segment>> getSegments(final Table table, int batches) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       db.get().underlyingConnection().setSchema(table.schema);
 
       Sql sql = new Sql();

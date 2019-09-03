@@ -11,6 +11,8 @@ import com.github.susom.starr.dbtoavro.jobrunner.jobs.Loader;
 import com.github.susom.starr.dbtoavro.jobrunner.util.DatabaseProviderRx;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -37,7 +39,8 @@ public class AvroExporter implements Exporter {
 
     long targetSize = config.getLong("avro.targetsize", 0);
     int threads = (int) (cores * (config.getDouble("avro.core.multiplier", 0.5)));
-    String path = job.destination + filePattern;
+
+    String path = Paths.get(job.destination, filePattern).toString();
 
     ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
 

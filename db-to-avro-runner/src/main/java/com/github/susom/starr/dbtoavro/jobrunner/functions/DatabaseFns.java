@@ -27,7 +27,6 @@ import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.File;
 import java.util.List;
-import java.util.Locale;
 import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +50,7 @@ public abstract class DatabaseFns {
    * @return database object
    */
   public Single<Database> getDatabase(String containerId) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       Database database = new Database(containerId);
       database.flavor = db.get().flavor();
       return database;
@@ -64,7 +63,7 @@ public abstract class DatabaseFns {
    * @return Single boolean indicating if database connection was successful
    */
   public Single<Boolean> isValid() {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       LOGGER.debug("Attempting to connect to database...");
       try {
         return db.get().underlyingConnection().isValid(30000);

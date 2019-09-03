@@ -85,7 +85,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getSchemas(String catalog) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet schemas = metadata.getSchemas(catalog, null)) {
         List<String> schemasList = new ArrayList<>();
@@ -99,7 +99,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       LOGGER.info("Introspecting table {}", table);
       db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
@@ -139,6 +139,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
           }
         }
       } catch (SQLException expected) {
+        LOGGER.trace("Unable to use sp_spaceused to determine table size", expected);
       }
 
       // Number of rows
@@ -160,7 +161,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getTables(String catalog, String schema) {
-    return dbb.withConnectionAccess().transactRx(db -> {
+    return dbb.transactRx(db -> {
       db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
