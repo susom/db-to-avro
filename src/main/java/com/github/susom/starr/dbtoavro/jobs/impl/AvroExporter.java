@@ -11,7 +11,6 @@ import com.github.susom.starr.dbtoavro.jobs.Loader;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
-import java.io.File;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,7 +36,6 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    long targetSize = config.getLong("avro.targetsize", 0);
     int threads = (int) (cores * (config.getDouble("avro.core.multiplier", 0.5)));
 
     String path = Paths.get(job.destination, filePattern).toString();
@@ -49,7 +47,7 @@ public class AvroExporter implements Exporter {
     return loader.run(job)
         .flatMapObservable(database -> {
 
-          AvroFns avroFns = FnFactory.getAvroFns(database.flavor, config, dbb);
+          AvroFns avroFns = FnFactory.getAvroFns(database.flavor, job, dbb);
           DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
 
           return
@@ -65,13 +63,13 @@ public class AvroExporter implements Exporter {
                                   .subscribeOn(Schedulers.from(dbPoolSched))
                           )
                           .flatMap(table ->
-                              avroFns.optimizedQuery(table, targetSize, path)
+                              avroFns.optimizedQuery(table, job.avroSize, path)
                                   .flatMap(query ->
                                       avroFns.saveAsAvro(query)
                                           .subscribeOn(Schedulers.from(dbPoolSched))
                                   )
                                   .switchIfEmpty(
-                                      avroFns.query(table, targetSize, path)
+                                      avroFns.query(table, job.avroSize, path)
                                           .flatMap(query ->
                                               avroFns.saveAsAvro(query)
                                                   .subscribeOn(Schedulers.from(dbPoolSched))

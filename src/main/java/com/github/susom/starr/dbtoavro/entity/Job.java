@@ -19,7 +19,6 @@
 package com.github.susom.starr.dbtoavro.entity;
 
 import com.github.susom.database.Flavor;
-import java.io.File;
 import java.util.List;
 
 /**
@@ -27,7 +26,7 @@ import java.util.List;
  */
 public class Job {
 
-  public final Long id;
+  public final String id;
   public final List<String> backupFiles;
   public final String backupDir;
   public final String catalog;
@@ -40,6 +39,15 @@ public class Job {
   public final String destination;
   public final String connection;
   public final String timezone;
+  public final Boolean stringDate;
+  public final String stringDateFormat;
+  public final String stringDateSuffix;
+  public final int fetchRows;
+  public final int avroSize;
+  public final String codec;
+  public final boolean optimized;
+  public final boolean tidyTables;
+
 
   // Job files
   public List<AvroFile> avro;
@@ -58,11 +66,19 @@ public class Job {
     this.destination = builder.destination;
     this.connection = builder.connection;
     this.timezone = builder.timezone;
+    this.stringDate = builder.stringDate;
+    this.stringDateFormat = builder.stringDateFormat;
+    this.stringDateSuffix = builder.stringDateSuffix;
+    this.fetchRows = builder.fetchRows;
+    this.avroSize = builder.avroSize;
+    this.codec = builder.codec;
+    this.optimized = builder.optimized;
+    this.tidyTables = builder.tidyTables;
   }
 
   public static class Builder {
 
-    private Long id;
+    private String id;
     private List<String> backupFiles;
     private String backupDir;
     private String catalog;
@@ -75,6 +91,14 @@ public class Job {
     private String destination;
     private String connection;
     private String timezone;
+    private Boolean stringDate;
+    private String stringDateFormat;
+    private String stringDateSuffix;
+    private int fetchRows;
+    private int avroSize;
+    private String codec;
+    private boolean optimized;
+    private boolean tidyTables;
 
     public Builder() {
     }
@@ -83,7 +107,7 @@ public class Job {
       return new Job(this);
     }
 
-    public Builder id(long id) {
+    public Builder id(String id) {
       this.id = id;
       return this;
     }
@@ -145,6 +169,46 @@ public class Job {
 
     public Builder timezone(String timezone) {
       this.timezone = timezone;
+      return this;
+    }
+
+    public Builder stringDate(boolean stringDate) {
+      this.stringDate = stringDate;
+      return this;
+    }
+
+    public Builder stringDateFormat(String stringDateFormat) {
+      this.stringDateFormat = stringDateFormat;
+      return this;
+    }
+
+    public Builder stringDateSuffix(String stringDateSuffix) {
+      this.stringDateSuffix = stringDateSuffix;
+      return this;
+    }
+
+    public Builder fetchRows(int fetchRows) {
+      this.fetchRows = fetchRows;
+      return this;
+    }
+
+    public Builder avroSize(int avroSize) {
+      this.avroSize = avroSize;
+      return this;
+    }
+
+    public Builder codec(String codec) {
+      this.codec = codec;
+      return this;
+    }
+
+    public Builder optimized(boolean optimized) {
+      this.optimized = optimized;
+      return this;
+    }
+
+    public Builder tidyTables(boolean tidyTables) {
+      this.tidyTables = tidyTables;
       return this;
     }
 

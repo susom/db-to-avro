@@ -30,7 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Loads an (already) running SQL server instance
+ * Loads an (already) running Oracle instance
  */
 public class OracleLoadDatabase implements Loader {
 

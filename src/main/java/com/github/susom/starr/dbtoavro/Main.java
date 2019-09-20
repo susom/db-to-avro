@@ -23,7 +23,7 @@ import static java.lang.System.exit;
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
 import com.github.susom.database.Flavor;
-import com.github.susom.starr.dbtoavro.entity. Job;
+import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Job.Builder;
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +46,12 @@ public class Main {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
+  private static final int DEFAULT_FETCH_COUNT = 50000;
+  private static final String DEFAULT_ORACLE_DATE_FORMAT = "YYYY-MM-DD\"T\"HH24:MM:SS";
+  private static final String DEFAULT_SQLSERVER_DATETIME_FORMAT = "yyyy-MM-ddTHH:mm:ss";
+  private static final String DEFAULT_DATETIME_COLUMN_SUFFIX = "__DATETIME_STRING";
+  private static final String DEFAULT_AVRO_CODEC = "uncompressed";
+
   public static void main(String[] args) {
     // Make sure we use the real console for error logging here because something
     // might have gone wrong during notify config or console redirection
@@ -67,51 +73,105 @@ public class Main {
   private void launch(String[] args) throws IOException {
 
     OptionParser parser = new OptionParser();
-    OptionSpec<Flavor> flavor = parser.accepts("flavor", "database type (sqlserver, oracle)")
+    OptionSpec<String> flavorOpt = parser.accepts("flavor", "database type (sqlserver, oracle)")
       .withRequiredArg()
       .required()
-      .ofType(Flavor.class);
-    OptionSpec<String> connection = parser.accepts("connect", "jdbc connection string for existing database")
+      .ofType(String.class);
+
+    OptionSpec<String> connectionOpt = parser.accepts("connect", "jdbc connection string for existing database")
       .withRequiredArg();
-    OptionSpec<String> user = parser.accepts("user", "database user (existing db)")
-      .requiredIf(connection)
+
+    OptionSpec<String> userOpt = parser.accepts("user", "database user (existing db)")
+      .requiredIf(connectionOpt)
       .withRequiredArg();
-    OptionSpec<File> passwordFile = parser.accepts("password-file", "database password file (existing db)")
+
+    OptionSpec<File> passwordFileOpt = parser.accepts("password-file", "database password file (existing db)")
       .withRequiredArg()
       .ofType(File.class);
-    OptionSpec<String> password = parser.accepts("password", "database password (existing db)")
+
+    OptionSpec<String> passwordOpt = parser.accepts("password", "database password (existing db)")
       .withRequiredArg();
-    OptionSpec<String> backupDir = parser
-      .accepts("backup-dir", "directory containing backup to restore, mounted as /backup in container")
-      .requiredUnless(connection)
+
+    OptionSpec<String> backupDirOpt = parser
+      .accepts("backup-dir", "directory containing backup files to restore, mounted as /backup in container")
+      .requiredUnless(connectionOpt)
       .withRequiredArg();
-    OptionSpec<String> backupFiles = parser
+
+    OptionSpec<String> backupFilesOpt = parser
       .accepts("backup-files", "comma-delimited list of .bak files (MSSQL), or a single .par file (Oracle)")
-      .requiredIf(backupDir)
-      .availableUnless(connection)
+      .requiredIf(backupDirOpt)
+      .availableUnless(connectionOpt)
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
-    OptionSpec<String> destination = parser.accepts("destination", "avro destination directory").withRequiredArg();
-    OptionSpec<String> catalog = parser.accepts("catalog", "catalog to export").withRequiredArg();
-    OptionSpec<String> schemas = parser.accepts("schemas", "only export this comma-delimited list of schemas")
+
+    OptionSpec<String> destinationOpt = parser.accepts("destination", "avro destination directory").withRequiredArg();
+
+    OptionSpec<String> catalogOpt = parser.accepts("catalog", "catalog to export").withRequiredArg();
+
+    OptionSpec<String> schemasOpt = parser.accepts("schemas", "only export this comma-delimited list of schemas")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
-    OptionSpec<String> tables = parser.accepts("tables", "only export this comma-delimited list of tables")
+
+    OptionSpec<String> tablesOpt = parser.accepts("tables", "only export this comma-delimited list of tables")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
-    OptionSpec<String> filters = parser.accepts("exclude", "exclusions in form schema(.table)(.column)")
+
+    OptionSpec<String> filtersOpt = parser.accepts("exclude", "exclusions in form schema(.table)(.column)")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
-    OptionSpec<String> preSql = parser.accepts("pre-sql", "path of sql file to execute before restore")
-      .availableUnless(connection)
+
+    OptionSpec<String> preSqlOpt = parser.accepts("pre-sql", "path of sql file to execute before restore")
+      .availableUnless(connectionOpt)
       .withRequiredArg();
-    OptionSpec<String> postSql = parser.accepts("post-sql", "path of sql file to execute after restore")
-      .availableUnless(connection)
+
+    OptionSpec<String> postSqlOpt = parser.accepts("post-sql", "path of sql file to execute after restore")
+      .availableUnless(connectionOpt)
       .withRequiredArg();
+
+    OptionSpec<Boolean> dateStringOpt = parser
+      .accepts("date-to-string", "Convert Date (Oracle) DateTime (SQLServer) types to String (default YYYY-MM-DDTHH:mm:ss)")
+      .withRequiredArg()
+      .ofType(Boolean.class);
+
+    OptionSpec<String> dateStringFormatOpt = parser
+      .accepts("date-string-format", "Format when converting Date to String")
+      .withRequiredArg()
+      .ofType(String.class);
+
+    OptionSpec<String> dateStringSuffixOpt = parser.accepts("date-string-suffix",
+      "Append this column name suffix to columns that have been converted from a Date/DateTime to a String")
+      .withRequiredArg()
+      .ofType(String.class);
+
+    OptionSpec<Integer> fetchRowCountOpt = parser.accepts("fetch-row-count",
+      String.format("Number of rows to fetch from DB per query (default %d)", DEFAULT_FETCH_COUNT))
+      .withRequiredArg()
+      .ofType(Integer.class);
+
+    OptionSpec<String> avroCodecOpt = parser
+      .accepts("avro-codec",
+        String.format("Avro compression: uncompressed, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
+      .withRequiredArg()
+      .ofType(String.class);
+
+    OptionSpec<Integer> avroSizeOpt = parser
+      .accepts("avro-size", "Target number of database bytes to write per Avro file (will vary if Avro compression enabled)")
+      .withRequiredArg()
+      .ofType(Integer.class);
+
+    OptionSpec<Boolean> optimizedOpt = parser
+      .accepts("enable-optimizer", "Enable high-performance DB queries (MS SQL Server is experimental)")
+      .withRequiredArg()
+      .ofType(Boolean.class);
+
+    OptionSpec<Boolean> tidyOpt = parser.accepts("tidy-tables", "Normalize table names (columns are always normalized)")
+      .withRequiredArg()
+      .ofType(Boolean.class);
+
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
 
     try {
@@ -123,48 +183,143 @@ public class Main {
         exit(0);
       }
 
-      final Job job = new Builder()
-        .id(0L)
-        .flavor(optionSet.valueOf(flavor))
-        .catalog(optionSet.valueOf(catalog))
-        .schemas(optionSet.valuesOf(schemas))
-        .tables(optionSet.valuesOf(tables))
-        .exclusions(optionSet.valuesOf(filters))
-        .backupDir(optionSet.valueOf(backupDir))
-        .backupFiles(optionSet.has(backupFiles)
-          ? optionSet.valuesOf(backupFiles)
-          : (optionSet.has(backupDir)
-            ? Files.list(Paths.get(optionSet.valueOf(backupDir))).filter(Files::isRegularFile).map(Path::toString)
+      // Configuration Properties can be overridden by command-line options
+      Config config = readConfig();
+
+      int fetchRowCount = config.getInteger("fetch.row.count", DEFAULT_FETCH_COUNT);
+      if (optionSet.has(fetchRowCountOpt)) {
+        fetchRowCount = optionSet.valueOf(fetchRowCountOpt);
+      }
+
+      boolean oracleDateString = config.getBooleanOrFalse("oracle.date.string");
+      if (optionSet.has(dateStringOpt)) {
+        oracleDateString = optionSet.valueOf(dateStringOpt);
+      }
+
+      String oracleDateFormat = config.getString("oracle.date.string.format", DEFAULT_ORACLE_DATE_FORMAT);
+      if (optionSet.has(dateStringFormatOpt)) {
+        oracleDateFormat = optionSet.valueOf(dateStringFormatOpt);
+      }
+
+      String oracleDateSuffix = config.getString("oracle.date.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
+      if (optionSet.has(dateStringSuffixOpt)) {
+        oracleDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
+      }
+
+      String sqlserverDateTimeFormat = config.getString("sqlserver.datetime.string.format", DEFAULT_SQLSERVER_DATETIME_FORMAT);
+      if (optionSet.has(dateStringFormatOpt)) {
+        sqlserverDateTimeFormat = optionSet.valueOf(dateStringFormatOpt);
+      }
+
+      String sqlserverDateTimeSuffix = config.getString("sqlserver.datetime.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
+      if (optionSet.has(dateStringSuffixOpt)) {
+        sqlserverDateTimeSuffix = optionSet.valueOf(dateStringSuffixOpt);
+      }
+
+      String flavor = optionSet.valueOf(flavorOpt).toLowerCase();
+      String stringDateFormat = null;
+      String stringDateSuffix = null;
+      switch (flavor) {
+        case "oracle":
+          stringDateFormat = oracleDateFormat;
+          stringDateSuffix = oracleDateSuffix;
+          break;
+        case "sqlserver":
+          stringDateFormat = sqlserverDateTimeFormat;
+          stringDateSuffix = sqlserverDateTimeSuffix;
+          break;
+        default:
+          parser.printHelpOn(System.out);
+          System.err.printf("\nUnknown database flavor specified: %s%n", flavor);
+          exit(1);
+      }
+
+      String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase();
+      if (optionSet.has(avroCodecOpt)) {
+        codec = optionSet.valueOf(avroCodecOpt).toLowerCase();
+      }
+      switch (codec) {
+        case "uncompressed":
+        case "snappy":
+        case "deflate":
+          break;
+        default:
+          parser.printHelpOn(System.out);
+          System.err.println("\nInvalid Avro compression codec specified");
+          exit(1);
+      }
+
+      boolean optimized = config.getBooleanOrFalse("database.optimized.enable");
+      if (optionSet.has(optimizedOpt)) {
+        optimized = optionSet.valueOf(optimizedOpt);
+      }
+
+      boolean tidyTables = config.getBooleanOrFalse("tidy.table.names");
+      if (optionSet.has(tidyOpt)) {
+        tidyTables = optionSet.valueOf(tidyOpt);
+      }
+
+      int avroSize = config.getInteger("avro.size", 0);
+      if (optionSet.has(avroSizeOpt)) {
+        avroSize = optionSet.valueOf(avroSizeOpt);
+      }
+
+      // Keep database connection strings as properties-only, so they don't show up in job logs
+      ConfigFrom finalConfiguration = Config.from().config(config);
+
+      String connection = config.getString(flavor + ".database.url");
+      if (optionSet.has(connectionOpt)) {
+        connection = optionSet.valueOf(connectionOpt);
+      }
+      finalConfiguration.value("database.url", connection);
+
+      String databaseUser = config.getString(flavor + ".database.user");
+      if (optionSet.has(userOpt)) {
+        databaseUser = optionSet.valueOf(userOpt);
+      }
+      finalConfiguration.value("database.user", databaseUser);
+
+      String databasePassword = config.getString(flavor + ".database.password");
+      if (optionSet.has(passwordOpt)) {
+        databasePassword = optionSet.valueOf(passwordOpt);
+      } else if (optionSet.has(passwordFileOpt)) {
+        databasePassword = new String(Files.readAllBytes(optionSet.valueOf(passwordFileOpt).toPath()),
+          Charset.defaultCharset());
+      }
+      finalConfiguration.value("database.password", databasePassword);
+
+      config = finalConfiguration.get();
+
+      // Create job based on computed configuration values
+      final Builder jobBuilder = new Builder()
+        .id(config.getString("UUID"))
+        .flavor(Flavor.valueOf(flavor))
+        .catalog(optionSet.valueOf(catalogOpt))
+        .schemas(optionSet.valuesOf(schemasOpt))
+        .tables(optionSet.valuesOf(tablesOpt))
+        .exclusions(optionSet.valuesOf(filtersOpt))
+        .backupDir(optionSet.valueOf(backupDirOpt))
+        .backupFiles(optionSet.has(backupFilesOpt)
+          ? optionSet.valuesOf(backupFilesOpt)
+          : (optionSet.has(backupDirOpt)
+            ? Files.list(Paths.get(optionSet.valueOf(backupDirOpt))).filter(Files::isRegularFile).map(Path::toString)
             .collect(Collectors.toList())
             : null))
-        .destination(optionSet.valueOf(destination))
-        .preSql(optionSet.valueOf(preSql))
-        .postSql(optionSet.valueOf(postSql))
-        .connection(optionSet.valueOf(connection))
+        .destination(optionSet.valueOf(destinationOpt))
+        .preSql(optionSet.valueOf(preSqlOpt))
+        .postSql(optionSet.valueOf(postSqlOpt))
+        .connection(connection)
         .timezone(System.getProperty("user.timezone"))
-        .build();
+        .fetchRows(fetchRowCount)
+        .avroSize(avroSize)
+        .stringDate(oracleDateString)
+        .tidyTables(tidyTables)
+        .codec(codec)
+        .optimized(optimized)
+        .stringDateFormat(stringDateFormat)
+        .stringDateSuffix(stringDateSuffix);
 
-      Config config = readConfig();
-      if (job.connection == null) {
-        config = Config.from().config(config)
-          .value("database.url", config.getString(job.flavor + ".database.url"))
-          .value("database.user", config.getString(job.flavor + ".database.user"))
-          .value("database.password", config.getString(job.flavor + ".database.password")).get();
-      } else {
-        ConfigFrom conf = Config.from()
-          .config(config)
-          .value("database.url", optionSet.valueOf(connection))
-          .value("database.user", optionSet.valueOf(user));
-        if (optionSet.valueOf(password) != null) {
-          conf = conf.value("database.password", optionSet.valueOf(password));
-        }
-        if (optionSet.valueOf(passwordFile) != null) {
-          String pass = new String(Files.readAllBytes(optionSet.valueOf(passwordFile).toPath()),
-            Charset.defaultCharset());
-          conf = conf.value("database.password", pass);
-        }
-        config = conf.get();
-      }
+      Job job = jobBuilder.build();
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
@@ -174,7 +329,7 @@ public class Main {
       LOGGER.info("Set the -Duser.timezone= property if the source database is not {}.", tz);
 
       // Create destination directory if it doesn't already exist
-      File destDir = new File(optionSet.valueOf(destination));
+      File destDir = new File(optionSet.valueOf(destinationOpt));
       if (destDir.isFile()) {
         parser.printHelpOn(System.out);
         System.err.println("\nDestination must be a directory");

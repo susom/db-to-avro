@@ -2,6 +2,7 @@ package com.github.susom.starr.dbtoavro.functions.impl;
 
 import com.github.susom.database.Config;
 import com.github.susom.database.Flavor;
+import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.DockerFns;
@@ -12,12 +13,12 @@ import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
  */
 public class FnFactory {
 
-  public static AvroFns getAvroFns(Flavor flav, Config config, DatabaseProviderRx.Builder dbb) {
+  public static AvroFns getAvroFns(Flavor flav, Job job, DatabaseProviderRx.Builder dbb) {
     switch (flav) {
       case sqlserver:
-        return new SqlServerAvroFns(config, dbb);
+        return new SqlServerAvroFns(job, dbb);
       case oracle:
-        return new OracleAvroFns(config, dbb);
+        return new OracleAvroFns(job, dbb);
       default:
         throw new RuntimeException("Flavor " + flav + " is not supported");
     }

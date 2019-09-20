@@ -1,8 +1,8 @@
 package com.github.susom.starr.dbtoavro.functions.impl;
 
-import com.github.susom.database.Config;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
+import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
@@ -27,14 +27,14 @@ public class SqlServerAvroFns implements AvroFns {
   private final int fetchSize;
   private CodecFactory codec;
   private boolean optimized;
-  private boolean tidy;
+  private boolean tidyTables;
 
-  public SqlServerAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
+  public SqlServerAvroFns(Job job, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
-    this.fetchSize = config.getInteger("avro.fetchsize", 10000);
-    this.codec = CodecFactory.fromString(config.getString("avro.codec", "snappy"));
-    this.optimized = config.getBooleanOrFalse("sqlserver.optimized.enable");
-    this.tidy = config.getBooleanOrFalse("avro.tidy");
+    this.fetchSize = job.fetchRows;
+    this.codec = CodecFactory.fromString(job.codec);
+    this.optimized = job.optimized;
+    this.tidyTables = job.tidyTables;
   }
 
   @Override
@@ -50,7 +50,7 @@ public class SqlServerAvroFns implements AvroFns {
           .withCodec(codec)
           .fetchSize(fetchSize);
 
-      if (tidy) {
+      if (tidyTables) {
         avro = avro.tidyNames();
       }
 
@@ -184,7 +184,7 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   private String tidy(final String name) {
-    if (tidy) {
+    if (tidyTables) {
       return name
           .replaceAll("[^a-zA-Z0-9]", " ")
           .replaceAll("\\s", "_")

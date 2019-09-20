@@ -1,9 +1,9 @@
 package com.github.susom.starr.dbtoavro.functions.impl;
 
-import com.github.susom.database.Config;
 import com.github.susom.database.Sql;
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
+import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
@@ -30,14 +30,20 @@ public class OracleAvroFns implements AvroFns {
   private final int fetchSize;
   private CodecFactory codec;
   private boolean optimized;
-  private boolean tidy;
+  private boolean tidyTables;
+  private boolean oracleStringDate;
+  private String stringDateFormat;
+  private String stringDateSuffix;
 
-  public OracleAvroFns(Config config, DatabaseProviderRx.Builder dbb) {
+  public OracleAvroFns(Job job, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
-    this.fetchSize = config.getInteger("avro.fetchsize", 10000);
-    this.codec = CodecFactory.fromString(config.getString("avro.codec", "snappy"));
-    this.optimized = config.getBooleanOrFalse("oracle.optimized.enable");
-    this.tidy = config.getBooleanOrFalse("avro.tidy");
+    this.fetchSize = job.fetchRows;
+    this.codec = CodecFactory.fromString(job.codec);
+    this.optimized = job.optimized;
+    this.tidyTables = job.tidyTables;
+    this.oracleStringDate = job.stringDate;
+    this.stringDateFormat = job.stringDateFormat;
+    this.stringDateSuffix = job.stringDateSuffix;
   }
 
   @Override
@@ -55,7 +61,7 @@ public class OracleAvroFns implements AvroFns {
           .withCodec(codec)
           .fetchSize(fetchSize);
 
-      if (tidy) {
+      if (tidyTables) {
         avro = avro.tidyNames();
       }
 
@@ -86,9 +92,20 @@ public class OracleAvroFns implements AvroFns {
 
     // Only dump the supported column types
     String columns = table.columns.stream()
-        .filter(c -> c.serializable)
-        .map(c -> "\"" + c.name + "\"")
-        .collect(Collectors.joining(", "));
+      .filter(c -> c.serializable)
+      .map(c -> {
+        // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP
+        if (oracleStringDate && c.typeName.equals("DATE")) {
+          return String.format("TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
+            c.name,
+            stringDateFormat.replace(":", "::"),
+            c.name,
+            stringDateSuffix);
+        } else {
+          return "\"" + c.name + "\"";
+        }
+      })
+      .collect(Collectors.joining(", "));
 
     String sql = String
         .format(Locale.CANADA, "SELECT %s FROM \"%s\".\"%s\"", columns, table.schema,
@@ -189,7 +206,7 @@ public class OracleAvroFns implements AvroFns {
   }
 
   private String tidy(final String name) {
-    if (tidy) {
+    if (tidyTables) {
       return name
           .replaceAll("[^a-zA-Z0-9]", " ")
           .replaceAll("\\s", "_")

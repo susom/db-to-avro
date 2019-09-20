@@ -18,6 +18,7 @@
 package com.github.susom.starr.dbtoavro.docker.impl;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.ExecCreateCmdResponse;
 import com.github.dockerjava.api.command.PingCmd;
 import com.github.dockerjava.api.model.Bind;
@@ -47,7 +48,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import javax.ws.rs.ProcessingException;
 import org.slf4j.Logger;
@@ -65,9 +65,13 @@ public class DockerServiceImpl implements DockerService {
   private StringBuilder stdinBuffer;
   private StringBuilder stdoutBuffer;
   private StringBuilder stderrBuffer;
+  private String networkMode;
+  private String containerIp;
 
   public DockerServiceImpl(Config config) {
     this.socket = config.getString("docker.host", "unix:///var/run/docker.sock");
+    this.networkMode = config.getString("docker.container.network.mode", "bridge");
+    this.containerIp = config.getString("docker.container.network.ipv4addr", "10.10.10.100");
     this.stdinBuffer = new StringBuilder();
     this.stdoutBuffer = new StringBuilder();
     this.stderrBuffer = new StringBuilder();
@@ -88,28 +92,25 @@ public class DockerServiceImpl implements DockerService {
 
     Ports portBindings = new Ports();
     ports.forEach(port -> portBindings.bind(
-        ExposedPort.tcp(Integer.valueOf(port.split(":")[0])),
-        Ports.Binding.bindPort(Integer.valueOf(port.split(":")[1])))
+        ExposedPort.tcp(Integer.parseInt(port.split(":")[0])),
+        Ports.Binding.bindPort(Integer.parseInt(port.split(":")[1])))
     );
 
-    return
-        dockerClient
-            .createContainerCmd(image)
-            .withHostConfig(
-                new HostConfig()
-                    .withBinds(binds)
-                    .withPortBindings(portBindings)
-                    .withNetworkMode("db-to-avro"))
-            .withIpv4Address("10.10.10.100")
-            .withVolumes(volumes)
-            .withEnv(env.toArray(new String[0]))
-            .withLabels(new HashMap<String, String>() {
-                          {
-                            put("creator", "db-to-avro");
-                          }
-                        }
-            )
-            .exec().getId();
+    CreateContainerCmd containerCmd = dockerClient
+      .createContainerCmd(image)
+      .withHostConfig(new HostConfig()
+        .withBinds(binds)
+        .withPortBindings(portBindings)
+        .withNetworkMode(networkMode))
+      .withVolumes(volumes)
+      .withEnv(env.toArray(new String[0]));
+
+    if (!networkMode.equals("bridge")) {
+      containerCmd.withIpv4Address(containerIp);
+    }
+
+    return containerCmd.exec().getId();
+
   }
 
   @Override
