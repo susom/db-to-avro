@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import joptsimple.OptionException;
@@ -147,13 +148,13 @@ public class Main {
       .ofType(String.class);
 
     OptionSpec<Integer> fetchRowCountOpt = parser.accepts("fetch-row-count",
-      String.format("Number of rows to fetch from DB per query (default %d)", DEFAULT_FETCH_COUNT))
+      String.format(Locale.CANADA, "Number of rows to fetch from DB per query (default %d)", DEFAULT_FETCH_COUNT))
       .withRequiredArg()
       .ofType(Integer.class);
 
     OptionSpec<String> avroCodecOpt = parser
       .accepts("avro-codec",
-        String.format("Avro compression: uncompressed, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
+        String.format(Locale.CANADA, "Avro compression: uncompressed, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
       .withRequiredArg()
       .ofType(String.class);
 
@@ -205,11 +206,11 @@ public class Main {
         stringDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
       }
 
-      String flavor = optionSet.valueOf(flavorOpt).toLowerCase();
+      String flavor = optionSet.valueOf(flavorOpt).toLowerCase(Locale.CANADA);
 
-      String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase();
+      String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase(Locale.CANADA);
       if (optionSet.has(avroCodecOpt)) {
-        codec = optionSet.valueOf(avroCodecOpt).toLowerCase();
+        codec = optionSet.valueOf(avroCodecOpt).toLowerCase(Locale.CANADA);
       }
       switch (codec) {
         case "uncompressed":

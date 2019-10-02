@@ -194,7 +194,7 @@ public class OracleAvroFns implements AvroFns {
       .map(c -> {
         // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP
         if (stringDate && c.typeName.equals("DATE")) {
-          return String.format("TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
+          return String.format(Locale.CANADA, "TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
             c.name,
             stringDateFormat.replace(":", "::"),
             c.name,

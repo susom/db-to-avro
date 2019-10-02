@@ -195,7 +195,7 @@ public class SqlServerAvroFns implements AvroFns {
       .map(c -> {
         // Use column name string not JDBC type val to avoid mappings
         if (stringDate && c.typeName.equals("datetime")) {
-          return String.format("FORMAT([%s], '%s') AS [%s%s]",
+          return String.format(Locale.CANADA, "FORMAT([%s], '%s') AS [%s%s]",
             c.name,
             stringDateFormat.replace(":", "::"),
             c.name,
