@@ -23,7 +23,6 @@ import static java.lang.System.exit;
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
 import com.github.susom.database.Flavor;
-import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Job.Builder;
 import java.io.File;
 import java.io.IOException;
@@ -132,7 +131,7 @@ public class Main {
       .availableUnless(connectionOpt)
       .withRequiredArg();
 
-    OptionSpec<Boolean> dateStringOpt = parser
+    OptionSpec<Boolean> stringDateOpt = parser
       .accepts("date-to-string", "Convert Date (Oracle) DateTime (SQLServer) types to String (default YYYY-MM-DDTHH:mm:ss)")
       .withRequiredArg()
       .ofType(Boolean.class);
@@ -191,48 +190,22 @@ public class Main {
         fetchRowCount = optionSet.valueOf(fetchRowCountOpt);
       }
 
-      boolean oracleDateString = config.getBooleanOrFalse("oracle.date.string");
-      if (optionSet.has(dateStringOpt)) {
-        oracleDateString = optionSet.valueOf(dateStringOpt);
+      boolean stringDate = config.getBooleanOrFalse("date.string");
+      if (optionSet.has(stringDateOpt)) {
+        stringDate = optionSet.valueOf(stringDateOpt);
       }
 
-      String oracleDateFormat = config.getString("oracle.date.string.format", DEFAULT_ORACLE_DATE_FORMAT);
+      String stringDateFormat = config.getString("date.string.format", DEFAULT_ORACLE_DATE_FORMAT);
       if (optionSet.has(dateStringFormatOpt)) {
-        oracleDateFormat = optionSet.valueOf(dateStringFormatOpt);
+        stringDateFormat = optionSet.valueOf(dateStringFormatOpt);
       }
 
-      String oracleDateSuffix = config.getString("oracle.date.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
+      String stringDateSuffix = config.getString("date.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
       if (optionSet.has(dateStringSuffixOpt)) {
-        oracleDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
-      }
-
-      String sqlserverDateTimeFormat = config.getString("sqlserver.datetime.string.format", DEFAULT_SQLSERVER_DATETIME_FORMAT);
-      if (optionSet.has(dateStringFormatOpt)) {
-        sqlserverDateTimeFormat = optionSet.valueOf(dateStringFormatOpt);
-      }
-
-      String sqlserverDateTimeSuffix = config.getString("sqlserver.datetime.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
-      if (optionSet.has(dateStringSuffixOpt)) {
-        sqlserverDateTimeSuffix = optionSet.valueOf(dateStringSuffixOpt);
+        stringDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
       }
 
       String flavor = optionSet.valueOf(flavorOpt).toLowerCase();
-      String stringDateFormat = null;
-      String stringDateSuffix = null;
-      switch (flavor) {
-        case "oracle":
-          stringDateFormat = oracleDateFormat;
-          stringDateSuffix = oracleDateSuffix;
-          break;
-        case "sqlserver":
-          stringDateFormat = sqlserverDateTimeFormat;
-          stringDateSuffix = sqlserverDateTimeSuffix;
-          break;
-        default:
-          parser.printHelpOn(System.out);
-          System.err.printf("\nUnknown database flavor specified: %s%n", flavor);
-          exit(1);
-      }
 
       String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase();
       if (optionSet.has(avroCodecOpt)) {
@@ -308,18 +281,15 @@ public class Main {
         .destination(optionSet.valueOf(destinationOpt))
         .preSql(optionSet.valueOf(preSqlOpt))
         .postSql(optionSet.valueOf(postSqlOpt))
-        .connection(connection)
         .timezone(System.getProperty("user.timezone"))
         .fetchRows(fetchRowCount)
         .avroSize(avroSize)
-        .stringDate(oracleDateString)
+        .stringDate(stringDate)
         .tidyTables(tidyTables)
         .codec(codec)
         .optimized(optimized)
         .stringDateFormat(stringDateFormat)
         .stringDateSuffix(stringDateSuffix);
-
-      Job job = jobBuilder.build();
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
@@ -341,7 +311,7 @@ public class Main {
 
       long start;
       start = System.nanoTime();
-      new JobRunner(config, job)
+      new JobRunner(config, jobBuilder.build())
         .run()
         .doOnError(error -> {
           System.err.println("Job failed!");

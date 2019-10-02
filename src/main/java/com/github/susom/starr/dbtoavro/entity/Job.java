@@ -37,7 +37,6 @@ public class Job {
   public final String preSql;
   public final Flavor flavor;
   public final String destination;
-  public final String connection;
   public final String timezone;
   public final Boolean stringDate;
   public final String stringDateFormat;
@@ -64,7 +63,6 @@ public class Job {
     this.preSql = builder.preSql;
     this.flavor = builder.flavor;
     this.destination = builder.destination;
-    this.connection = builder.connection;
     this.timezone = builder.timezone;
     this.stringDate = builder.stringDate;
     this.stringDateFormat = builder.stringDateFormat;
@@ -89,7 +87,6 @@ public class Job {
     private String preSql;
     private Flavor flavor;
     private String destination;
-    private String connection;
     private String timezone;
     private Boolean stringDate;
     private String stringDateFormat;
@@ -159,11 +156,6 @@ public class Job {
 
     public Builder destination(String destination) {
       this.destination = destination;
-      return this;
-    }
-
-    public Builder connection(String connection) {
-      this.connection = connection;
       return this;
     }
 

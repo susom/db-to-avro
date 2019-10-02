@@ -70,14 +70,14 @@ public class JobRunner {
     Loader loader;
     switch (job.flavor) {
       case sqlserver:
-        if (job.connection == null) {
+        if (job.backupDir != null) {
           loader = new SqlServerLoadBackup(config, dbb);
         } else {
           loader = new SqlServerLoadDatabase(config, dbb);
         }
         break;
       case oracle:
-        if (job.connection == null) {
+        if (job.backupDir != null) {
           loader = new OracleLoadDataPump(config, dbb);
         } else {
           loader = new OracleLoadDatabase(config, dbb);

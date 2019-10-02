@@ -31,7 +31,7 @@ public class OracleAvroFns implements AvroFns {
   private CodecFactory codec;
   private boolean optimized;
   private boolean tidyTables;
-  private boolean oracleStringDate;
+  private boolean stringDate;
   private String stringDateFormat;
   private String stringDateSuffix;
 
@@ -41,7 +41,7 @@ public class OracleAvroFns implements AvroFns {
     this.codec = CodecFactory.fromString(job.codec);
     this.optimized = job.optimized;
     this.tidyTables = job.tidyTables;
-    this.oracleStringDate = job.stringDate;
+    this.stringDate = job.stringDate;
     this.stringDateFormat = job.stringDateFormat;
     this.stringDateSuffix = job.stringDateSuffix;
   }
@@ -91,21 +91,7 @@ public class OracleAvroFns implements AvroFns {
   public Observable<Query> query(final Table table, final long targetSize, final String pathPattern) {
 
     // Only dump the supported column types
-    String columns = table.columns.stream()
-      .filter(c -> c.serializable)
-      .map(c -> {
-        // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP
-        if (oracleStringDate && c.typeName.equals("DATE")) {
-          return String.format("TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
-            c.name,
-            stringDateFormat.replace(":", "::"),
-            c.name,
-            stringDateSuffix);
-        } else {
-          return "\"" + c.name + "\"";
-        }
-      })
-      .collect(Collectors.joining(", "));
+    String columns = getColumnSql(table);
 
     String sql = String
         .format(Locale.CANADA, "SELECT %s FROM \"%s\".\"%s\"", columns, table.schema,
@@ -148,10 +134,7 @@ public class OracleAvroFns implements AvroFns {
     }
 
     // Only dump the supported column types
-    String columns = table.columns.stream()
-        .filter(c -> c.serializable)
-        .map(c -> "\"" + c.name + "\"")
-        .collect(Collectors.joining(", "));
+    String columns = getColumnSql(table);
 
     int partitions = (int) (table.bytes / targetSize);
     return getSegments(table, (partitions * 2) + 1)
@@ -203,6 +186,24 @@ public class OracleAvroFns implements AvroFns {
         }).toObservable()
         .flatMapIterable(l -> l);
 
+  }
+
+  private String getColumnSql(Table table) {
+    return table.columns.stream()
+      .filter(c -> c.serializable)
+      .map(c -> {
+        // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP
+        if (stringDate && c.typeName.equals("DATE")) {
+          return String.format("TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
+            c.name,
+            stringDateFormat.replace(":", "::"),
+            c.name,
+            stringDateSuffix);
+        } else {
+          return "\"" + c.name + "\"";
+        }
+      })
+      .collect(Collectors.joining(", "));
   }
 
   private String tidy(final String name) {

@@ -28,6 +28,9 @@ public class SqlServerAvroFns implements AvroFns {
   private CodecFactory codec;
   private boolean optimized;
   private boolean tidyTables;
+  private boolean stringDate;
+  private String stringDateFormat;
+  private String stringDateSuffix;
 
   public SqlServerAvroFns(Job job, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
@@ -35,6 +38,9 @@ public class SqlServerAvroFns implements AvroFns {
     this.codec = CodecFactory.fromString(job.codec);
     this.optimized = job.optimized;
     this.tidyTables = job.tidyTables;
+    this.stringDate = job.stringDate;
+    this.stringDateFormat = job.stringDateFormat;
+    this.stringDateSuffix = job.stringDateSuffix;
   }
 
   @Override
@@ -80,10 +86,13 @@ public class SqlServerAvroFns implements AvroFns {
   public Observable<Query> query(final Table table, final long targetSize, final String pathPattern) {
 
     // Only dump the supported column types
-    String columns = table.columns.stream()
-        .filter(c -> c.serializable)
-        .map(c -> "[" + c.name + "]")
-        .collect(Collectors.joining(", "));
+//    String columns = table.columns.stream()
+//        .filter(c -> c.serializable)
+//        .map(c -> "[" + c.name + "]")
+//        .collect(Collectors.joining(", "));
+
+    // Only dump the supported column types
+    String columns = getColumnSql(table);
 
     String sql = String
         .format(Locale.CANADA, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
@@ -136,10 +145,7 @@ public class SqlServerAvroFns implements AvroFns {
     return Observable.create(emitter -> {
 
       // Only dump the supported column types
-      String columns = table.columns.stream()
-          .filter(c -> c.serializable)
-          .map(c -> "[" + c.name + "]")
-          .collect(Collectors.joining(", "));
+      String columns = getColumnSql(table);
 
       // Estimate how many rows it will take to reach the target file size for avro files
       long partitionSize = (targetSize) / (table.bytes / table.rows);
@@ -181,6 +187,24 @@ public class SqlServerAvroFns implements AvroFns {
 
     });
 
+  }
+
+  private String getColumnSql(Table table) {
+    return table.columns.stream()
+      .filter(c -> c.serializable)
+      .map(c -> {
+        // Use column name string not JDBC type val to avoid mappings
+        if (stringDate && c.typeName.equals("datetime")) {
+          return String.format("FORMAT([%s], '%s') AS [%s%s]",
+            c.name,
+            stringDateFormat.replace(":", "::"),
+            c.name,
+            stringDateSuffix);
+        } else {
+          return "[" + c.name + "]";
+        }
+      })
+      .collect(Collectors.joining(", "));
   }
 
   private String tidy(final String name) {
