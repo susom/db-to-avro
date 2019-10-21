@@ -85,6 +85,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getSchemas(String catalog) {
+    LOGGER.debug("Enumerating schemas...");
     return dbb.transactRx(db -> {
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet schemas = metadata.getSchemas(catalog, null)) {
