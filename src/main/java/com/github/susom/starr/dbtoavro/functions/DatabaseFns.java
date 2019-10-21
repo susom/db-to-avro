@@ -68,6 +68,7 @@ public abstract class DatabaseFns {
       try {
         return db.get().underlyingConnection().isValid(30000);
       } catch (DatabaseException ex) {
+        LOGGER.error("Failed to connect: ", ex);
         return false;
       }
     }).toSingle();

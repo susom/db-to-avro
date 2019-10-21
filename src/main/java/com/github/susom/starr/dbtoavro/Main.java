@@ -133,7 +133,7 @@ public class Main {
       .withRequiredArg();
 
     OptionSpec<Boolean> stringDateOpt = parser
-      .accepts("date-to-string", "Convert Date (Oracle) DateTime (SQLServer) types to String (default YYYY-MM-DDTHH:mm:ss)")
+      .accepts("date-string", "Convert Date (Oracle) DateTime (SQLServer) types to String (default YYYY-MM-DDTHH:mm:ss)")
       .withRequiredArg()
       .ofType(Boolean.class);
 
