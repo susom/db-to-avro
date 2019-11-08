@@ -9,9 +9,7 @@
   <logger name="com.github.susom.dbgoodies.etl" level="warn"/>
   <logger name="com.github.susom.database" level="warn" />
   <logger name="com.github.susom.starr.dbtoavro.util" level="info" />
-
-  <!-- Hikari annoyingly prints caught exceptions -->
-  <logger name="shaded.com.github.susom.database.shaded.com.zaxxer.hikari" level="off" />
+  <logger name="shaded.com.github.susom.database.shaded.com.zaxxer.hikari" level="warn" />
 
   <logger name="com.github.susom.starr.dbtoavro" level="debug" />
 

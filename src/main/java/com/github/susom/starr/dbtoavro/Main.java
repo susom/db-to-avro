@@ -46,11 +46,9 @@ public class Main {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-  private static final int DEFAULT_FETCH_COUNT = 50000;
-  private static final String DEFAULT_ORACLE_DATE_FORMAT = "YYYY-MM-DD\"T\"HH24:MM:SS";
-  private static final String DEFAULT_SQLSERVER_DATETIME_FORMAT = "yyyy-MM-ddTHH:mm:ss";
-  private static final String DEFAULT_DATETIME_COLUMN_SUFFIX = "__DATETIME_STRING";
-  private static final String DEFAULT_AVRO_CODEC = "uncompressed";
+  private static final int DEFAULT_FETCH_COUNT = 2000;
+  private static final String DEFAULT_DATETIME_COLUMN_SUFFIX = "__dt_str";
+  private static final String DEFAULT_AVRO_CODEC = "snappy";
 
   public static void main(String[] args) {
     // Make sure we use the real console for error logging here because something
@@ -114,12 +112,22 @@ public class Main {
       .ofType(String.class)
       .withValuesSeparatedBy(',');
 
-    OptionSpec<String> tablesOpt = parser.accepts("tables", "only export this comma-delimited list of tables")
+    OptionSpec<String> tablesOpt = parser.accepts("tables", "only export this comma-delimited list of schema.table")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
 
-    OptionSpec<String> filtersOpt = parser.accepts("exclude", "exclusions in form schema(.table)(.column)")
+    OptionSpec<String> tablePrioritiesOpt = parser.accepts("prioritize-tables", "comma-delimited list of schema.table that should be exported first")
+      .withRequiredArg()
+      .ofType(String.class)
+      .withValuesSeparatedBy(',');
+
+    OptionSpec<String> tableExclusionsOpt = parser.accepts("exclude-table", "case-insensitive regex filter matched against schema.table")
+      .withRequiredArg()
+      .ofType(String.class)
+      .withValuesSeparatedBy(',');
+
+    OptionSpec<String> columnExclusionsOpt = parser.accepts("exclude-column", "case-insensitive regex filter matched against schema.table.column")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
@@ -133,17 +141,12 @@ public class Main {
       .withRequiredArg();
 
     OptionSpec<Boolean> stringDateOpt = parser
-      .accepts("date-string", "Convert Date (Oracle) DateTime (SQLServer) types to String (default YYYY-MM-DDTHH:mm:ss)")
+      .accepts("date-string", "Convert Oracle(Date) or SQLServer(DateTime) types to ISO-8601 string")
       .withRequiredArg()
       .ofType(Boolean.class);
 
-    OptionSpec<String> dateStringFormatOpt = parser
-      .accepts("date-string-format", "Format when converting Date to String")
-      .withRequiredArg()
-      .ofType(String.class);
-
     OptionSpec<String> dateStringSuffixOpt = parser.accepts("date-string-suffix",
-      "Append this column name suffix to columns that have been converted from a Date/DateTime to a String")
+      "Append this column name suffix to columns that have been converted with --date-string")
       .withRequiredArg()
       .ofType(String.class);
 
@@ -154,7 +157,7 @@ public class Main {
 
     OptionSpec<String> avroCodecOpt = parser
       .accepts("avro-codec",
-        String.format(Locale.CANADA, "Avro compression: uncompressed, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
+        String.format(Locale.CANADA, "Avro compression: null, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
       .withRequiredArg()
       .ofType(String.class);
 
@@ -162,11 +165,6 @@ public class Main {
       .accepts("avro-size", "Target number of database bytes to write per Avro file (will vary if Avro compression enabled)")
       .withRequiredArg()
       .ofType(Integer.class);
-
-    OptionSpec<Boolean> optimizedOpt = parser
-      .accepts("enable-optimizer", "Enable high-performance DB queries (MS SQL Server is experimental)")
-      .withRequiredArg()
-      .ofType(Boolean.class);
 
     OptionSpec<Boolean> tidyOpt = parser.accepts("tidy-tables", "Normalize table names (columns are always normalized)")
       .withRequiredArg()
@@ -196,11 +194,6 @@ public class Main {
         stringDate = optionSet.valueOf(stringDateOpt);
       }
 
-      String stringDateFormat = config.getString("date.string.format", DEFAULT_ORACLE_DATE_FORMAT);
-      if (optionSet.has(dateStringFormatOpt)) {
-        stringDateFormat = optionSet.valueOf(dateStringFormatOpt);
-      }
-
       String stringDateSuffix = config.getString("date.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
       if (optionSet.has(dateStringSuffixOpt)) {
         stringDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
@@ -213,7 +206,7 @@ public class Main {
         codec = optionSet.valueOf(avroCodecOpt).toLowerCase(Locale.CANADA);
       }
       switch (codec) {
-        case "uncompressed":
+        case "null":
         case "snappy":
         case "deflate":
           break;
@@ -221,11 +214,6 @@ public class Main {
           parser.printHelpOn(System.out);
           System.err.println("\nInvalid Avro compression codec specified");
           exit(1);
-      }
-
-      boolean optimized = config.getBooleanOrFalse("database.optimized.enable");
-      if (optionSet.has(optimizedOpt)) {
-        optimized = optionSet.valueOf(optimizedOpt);
       }
 
       boolean tidyTables = config.getBooleanOrFalse("tidy.table.names");
@@ -271,7 +259,9 @@ public class Main {
         .catalog(optionSet.valueOf(catalogOpt))
         .schemas(optionSet.valuesOf(schemasOpt))
         .tables(optionSet.valuesOf(tablesOpt))
-        .exclusions(optionSet.valuesOf(filtersOpt))
+        .tablePriorities(optionSet.valuesOf(tablePrioritiesOpt))
+        .tableExclusions(optionSet.valuesOf(tableExclusionsOpt))
+        .columnExclusions(optionSet.valuesOf(columnExclusionsOpt))
         .backupDir(optionSet.valueOf(backupDirOpt))
         .backupFiles(optionSet.has(backupFilesOpt)
           ? optionSet.valuesOf(backupFilesOpt)
@@ -288,8 +278,6 @@ public class Main {
         .stringDate(stringDate)
         .tidyTables(tidyTables)
         .codec(codec)
-        .optimized(optimized)
-        .stringDateFormat(stringDateFormat)
         .stringDateSuffix(stringDateSuffix);
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());

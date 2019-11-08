@@ -87,9 +87,10 @@ public abstract class DatabaseFns {
    *
    * @param catalog catalog to query
    * @param schema schema to query
+   * @param priorities these tables are dumped first
    * @return observable of catalogs
    */
-  public abstract Observable<String> getTables(String catalog, String schema);
+  public abstract Observable<String> getTables(String catalog, String schema, List<String> priorities);
 
   /**
    * Introspects a database table, required for selecting the appropriate splitting and exporting method.
@@ -97,10 +98,10 @@ public abstract class DatabaseFns {
    * @param catalog catalog to query
    * @param schema schema to query
    * @param table table to introspect
-   * @param filters filter definitions
-   * @return observable of table with row counts, byte sizes, and supported column information
+   * @param columnExclusions excludes any regexes that match against schema.table.column
+   * @return Single of table with row counts, byte sizes, and supported column information
    */
-  public abstract Observable<Table> introspect(String catalog, String schema, String table, List<String> filters);
+  public abstract Single<Table> introspect(String catalog, String schema, String table, List<String> columnExclusions);
 
   public abstract Single<String> getRestoreSql(String catalog, List<String> backupFiles);
 

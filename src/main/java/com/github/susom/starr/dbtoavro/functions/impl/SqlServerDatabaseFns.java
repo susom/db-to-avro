@@ -19,7 +19,6 @@ package com.github.susom.starr.dbtoavro.functions.impl;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.entity.Column;
-import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx.Builder;
@@ -33,6 +32,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,7 +99,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Observable<Table> introspect(String catalog, String schema, String table, List<String> filters) {
+  public Single<Table> introspect(String catalog, String schema, String table, List<String> columnExclusions) {
     return dbb.transactRx(db -> {
       LOGGER.info("Introspecting table {}", table);
       db.get().underlyingConnection().setCatalog(catalog);
@@ -115,7 +115,8 @@ public class SqlServerDatabaseFns extends DatabaseFns {
           int type = columns.getInt(5);
           String typeName = columns.getString(6);
           boolean serializable = isSerializable(type)
-              && filters.stream().noneMatch(s -> s.equals(schema + "." + table + "." + colName));
+            && columnExclusions.stream()
+            .noneMatch(re -> (schema + "." + table + "." + colName).matches("(?i:" + re + ")"));
           cols.add(new Column(colName, type, typeName, serializable));
         }
         // Get primary keys
@@ -135,7 +136,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
         if (spaceUsed.execute()) {
           try (ResultSet rs = spaceUsed.getResultSet()) {
             while (rs.next()) {
-              bytes = Long.valueOf(rs.getString(4).replace(" KB", "")) * 1000;
+              bytes = Long.parseLong(rs.getString(4).replace(" KB", "")) * 1000;
             }
           }
         }
@@ -157,19 +158,28 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
       return new Table(catalog, schema, table, cols, bytes, rows);
 
-    }).toObservable();
+    }).toSingle();
   }
 
   @Override
-  public Observable<String> getTables(String catalog, String schema) {
+  public Observable<String> getTables(String catalog, String schema, List<String> priorities) {
     return dbb.transactRx(db -> {
+
+      List<String> schemaTables = priorities.stream()
+        .filter(t -> t.startsWith(schema + "."))
+        .map(t -> t.split("\\.")[1])
+        .collect(Collectors.toList());
+
       db.get().underlyingConnection().setCatalog(catalog);
       db.get().underlyingConnection().setSchema(schema);
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
-        List<String> tablesList = new ArrayList<>();
+        List<String> tablesList = new ArrayList<>(schemaTables);
         while (tables.next()) {
-          tablesList.add(tables.getString(3));
+          String tableName = tables.getString(3);
+          if (!tablesList.contains(tableName)) {
+            tablesList.add(tableName);
+          }
         }
         return tablesList;
       }

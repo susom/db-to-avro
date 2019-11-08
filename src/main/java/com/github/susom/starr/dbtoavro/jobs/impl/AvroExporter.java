@@ -36,50 +36,46 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = (int) (cores * (config.getDouble("avro.core.multiplier", 0.5)));
+    int threads = (int) (cores * (config.getDouble("avro.core.multiplier", 0.8)));
 
     String path = Paths.get(job.destination, filePattern).toString();
 
-    ExecutorService dbPoolSched = Executors.newFixedThreadPool(threads);
+    ExecutorService writerPool = Executors.newFixedThreadPool(threads);
 
     LOGGER.info("Starting export using {} threads", threads);
 
     return loader.run(job)
-        .flatMapObservable(database -> {
+      .flatMapObservable(database -> {
 
-          AvroFns avroFns = FnFactory.getAvroFns(database.flavor, job, dbb);
-          DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
+        AvroFns avroFns = FnFactory.getAvroFns(database.flavor, job, dbb);
+        DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
 
-          return
-              Observable.just(job.schemas).flatMapIterable(l -> l)
-                  .switchIfEmpty(dbFns.getSchemas(job.catalog))
-                  .filter(schema -> job.exclusions.stream().noneMatch(s -> s.equals(schema)))
-                  .flatMap(schema ->
-                      Observable.just(job.tables).flatMapIterable(l -> l)
-                          .switchIfEmpty(dbFns.getTables(job.catalog, schema))
-                          .filter(table -> job.exclusions.stream().noneMatch(s -> s.equals(schema + "." + table)))
-                          .flatMap(table ->
-                              dbFns.introspect(job.catalog, schema, table, job.exclusions)
-                                  .subscribeOn(Schedulers.from(dbPoolSched))
-                          )
-                          .flatMap(table ->
-                              avroFns.optimizedQuery(table, job.avroSize, path)
-                                  .flatMap(query ->
-                                      avroFns.saveAsAvro(query)
-                                          .subscribeOn(Schedulers.from(dbPoolSched))
-                                  )
-                                  .switchIfEmpty(
-                                      avroFns.query(table, job.avroSize, path)
-                                          .flatMap(query ->
-                                              avroFns.saveAsAvro(query)
-                                                  .subscribeOn(Schedulers.from(dbPoolSched))
-                                          )
-                                  )
-                          )
-                  );
-        })
-        .doOnComplete(dbPoolSched::shutdown);
-
+        return
+          dbFns.getSchemas(job.catalog)
+            .filter(schema ->
+              job.schemas.isEmpty()
+                || job.schemas.stream().anyMatch(x -> x.equals(schema)))
+            .flatMap(schema ->
+              dbFns.getTables(job.catalog, schema, job.tablePriorities)
+                .filter(tableName ->
+                  job.tables.isEmpty()
+                    || job.tables.stream().anyMatch(x -> x.equals(schema + "." + tableName))
+                )
+                .filter(tableName ->
+                  job.tableExclusions.isEmpty()
+                    || job.tableExclusions.stream()
+                    .noneMatch(re -> (schema + "." + tableName).matches("(?i:" + re + ")"))
+                )
+                .flatMap(tableName ->
+                  dbFns.introspect(job.catalog, schema, tableName, job.columnExclusions)
+                    .flatMap(table -> avroFns.query(table, job.avroSize, path))
+                    .flatMap(avroFns::saveAsAvro)
+                    .subscribeOn(Schedulers.from(writerPool))
+                    .toObservable()
+                )
+            );
+      })
+      .doOnComplete(writerPool::shutdown);
   }
 
 }

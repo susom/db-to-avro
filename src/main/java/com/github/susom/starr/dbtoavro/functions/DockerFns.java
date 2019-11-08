@@ -27,7 +27,6 @@ import io.reactivex.Observable;
 import io.reactivex.Single;
 import io.reactivex.exceptions.Exceptions;
 import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

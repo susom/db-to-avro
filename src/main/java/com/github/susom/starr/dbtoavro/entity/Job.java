@@ -32,21 +32,20 @@ public class Job {
   public final String catalog;
   public final List<String> schemas;
   public final List<String> tables;
-  public final List<String> exclusions;
+  public final List<String> tablePriorities;
+  public final List<String> tableExclusions;
+  public final List<String> columnExclusions;
   public final String postSql;
   public final String preSql;
   public final Flavor flavor;
   public final String destination;
   public final String timezone;
   public final Boolean stringDate;
-  public final String stringDateFormat;
   public final String stringDateSuffix;
   public final int fetchRows;
   public final int avroSize;
   public final String codec;
-  public final boolean optimized;
   public final boolean tidyTables;
-
 
   // Job files
   public List<AvroFile> avro;
@@ -58,19 +57,19 @@ public class Job {
     this.catalog = builder.catalog;
     this.schemas = builder.schemas;
     this.tables = builder.tables;
-    this.exclusions = builder.exclusions;
+    this.tablePriorities = builder.tablePriorities;
+    this.tableExclusions = builder.tableExclusions;
+    this.columnExclusions = builder.columnExclusions;
     this.postSql = builder.postSql;
     this.preSql = builder.preSql;
     this.flavor = builder.flavor;
     this.destination = builder.destination;
     this.timezone = builder.timezone;
     this.stringDate = builder.stringDate;
-    this.stringDateFormat = builder.stringDateFormat;
     this.stringDateSuffix = builder.stringDateSuffix;
     this.fetchRows = builder.fetchRows;
     this.avroSize = builder.avroSize;
     this.codec = builder.codec;
-    this.optimized = builder.optimized;
     this.tidyTables = builder.tidyTables;
   }
 
@@ -82,19 +81,19 @@ public class Job {
     private String catalog;
     private List<String> schemas;
     private List<String> tables;
-    private List<String> exclusions;
+    private List<String> tablePriorities;
+    private List<String> tableExclusions;
+    private List<String> columnExclusions;
     private String postSql;
     private String preSql;
     private Flavor flavor;
     private String destination;
     private String timezone;
     private Boolean stringDate;
-    private String stringDateFormat;
     private String stringDateSuffix;
     private int fetchRows;
     private int avroSize;
     private String codec;
-    private boolean optimized;
     private boolean tidyTables;
 
     public Builder() {
@@ -134,8 +133,18 @@ public class Job {
       return this;
     }
 
-    public Builder exclusions(List<String> exclusions) {
-      this.exclusions = exclusions;
+    public Builder tablePriorities(List<String> tablePriorities) {
+      this.tablePriorities = tablePriorities;
+      return this;
+    }
+
+    public Builder tableExclusions(List<String> tableExclusions) {
+      this.tableExclusions = tableExclusions;
+      return this;
+    }
+
+    public Builder columnExclusions(List<String> columnExclusions) {
+      this.columnExclusions = columnExclusions;
       return this;
     }
 
@@ -169,11 +178,6 @@ public class Job {
       return this;
     }
 
-    public Builder stringDateFormat(String stringDateFormat) {
-      this.stringDateFormat = stringDateFormat;
-      return this;
-    }
-
     public Builder stringDateSuffix(String stringDateSuffix) {
       this.stringDateSuffix = stringDateSuffix;
       return this;
@@ -191,11 +195,6 @@ public class Job {
 
     public Builder codec(String codec) {
       this.codec = codec;
-      return this;
-    }
-
-    public Builder optimized(boolean optimized) {
-      this.optimized = optimized;
       return this;
     }
 
