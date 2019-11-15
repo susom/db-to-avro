@@ -107,17 +107,17 @@ public class Main {
 
     OptionSpec<String> catalogOpt = parser.accepts("catalog", "catalog to export").withRequiredArg();
 
-    OptionSpec<String> schemasOpt = parser.accepts("schemas", "only export this comma-delimited list of schemas")
+    OptionSpec<String> schemasOpt = parser.accepts("schema", "only export this comma-delimited list of schemas")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
 
-    OptionSpec<String> tablesOpt = parser.accepts("tables", "only export this comma-delimited list of schema.table")
+    OptionSpec<String> tablesOpt = parser.accepts("table", "only export this comma-delimited list of schema.table")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
 
-    OptionSpec<String> tablePrioritiesOpt = parser.accepts("prioritize-tables", "comma-delimited list of schema.table that should be exported first")
+    OptionSpec<String> tablePrioritiesOpt = parser.accepts("prioritize-table", "comma-delimited list of schema.table that should be exported first")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
