@@ -90,7 +90,7 @@ public class OracleAvroFns implements AvroFns {
       String columns = getColumnSql(table);
 
       String sql = String
-        .format(Locale.CANADA, "SELECT %s FROM \"%s\".\"%s\"", columns, table.schema,
+        .format(Locale.ROOT, "SELECT %s FROM \"%s\".\"%s\"", columns, table.schema,
           table.name);
 
       String path;
@@ -122,7 +122,7 @@ public class OracleAvroFns implements AvroFns {
       .map(c -> {
         // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP
         if (stringDate && c.typeName.equals("DATE")) {
-          return String.format(Locale.CANADA, "TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
+          return String.format(Locale.ROOT, "TO_CHAR(\"%s\", '%s') AS \"%s%s\"",
             c.name,
             STRING_DATE_FORMAT.replace(":", "::"),
             c.name,
@@ -140,7 +140,7 @@ public class OracleAvroFns implements AvroFns {
         .replaceAll("[^a-zA-Z0-9]", " ")
         .replaceAll("\\s", "_")
         .trim()
-        .toLowerCase(Locale.CANADA);
+        .toLowerCase(Locale.ROOT);
     } else {
       return name;
     }

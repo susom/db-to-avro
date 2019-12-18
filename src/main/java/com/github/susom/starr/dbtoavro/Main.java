@@ -151,13 +151,13 @@ public class Main {
       .ofType(String.class);
 
     OptionSpec<Integer> fetchRowCountOpt = parser.accepts("fetch-row-count",
-      String.format(Locale.CANADA, "Number of rows to fetch from DB per query (default %d)", DEFAULT_FETCH_COUNT))
+      String.format(Locale.ROOT, "Number of rows to fetch from DB per query (default %d)", DEFAULT_FETCH_COUNT))
       .withRequiredArg()
       .ofType(Integer.class);
 
     OptionSpec<String> avroCodecOpt = parser
       .accepts("avro-codec",
-        String.format(Locale.CANADA, "Avro compression: null, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
+        String.format(Locale.ROOT, "Avro compression: null, snappy, deflate (default %s)", DEFAULT_AVRO_CODEC))
       .withRequiredArg()
       .ofType(String.class);
 
@@ -199,11 +199,11 @@ public class Main {
         stringDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
       }
 
-      String flavor = optionSet.valueOf(flavorOpt).toLowerCase(Locale.CANADA);
+      String flavor = optionSet.valueOf(flavorOpt).toLowerCase(Locale.ROOT);
 
-      String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase(Locale.CANADA);
+      String codec = config.getString("avro.codec", DEFAULT_AVRO_CODEC).toLowerCase(Locale.ROOT);
       if (optionSet.has(avroCodecOpt)) {
-        codec = optionSet.valueOf(avroCodecOpt).toLowerCase(Locale.CANADA);
+        codec = optionSet.valueOf(avroCodecOpt).toLowerCase(Locale.ROOT);
       }
       switch (codec) {
         case "null":

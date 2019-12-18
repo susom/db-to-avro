@@ -7,7 +7,6 @@ import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
-import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.File;
 import java.util.ArrayList;
@@ -86,7 +85,7 @@ public class SqlServerAvroFns implements AvroFns {
         String columns = getColumnSql(table);
 
         String sql = String
-          .format(Locale.CANADA, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
+          .format(Locale.ROOT, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
             table.name);
 
         String path;
@@ -94,14 +93,14 @@ public class SqlServerAvroFns implements AvroFns {
         long rowsPerFile = 0;
         if (targetSize > 0 && table.bytes > 0 && table.rows > 0 && table.bytes > targetSize) {
           path = pathPattern
-            .replace("%{CATALOG}", tidy(table.catalog))
-            .replace("%{SCHEMA}", tidy(table.schema))
+            .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
+            .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
             .replace("%{TABLE}", tidy(table.name));
           rowsPerFile = (targetSize) / (table.bytes / table.rows);
         } else {
           path = pathPattern
-            .replace("%{CATALOG}", tidy(table.catalog))
-            .replace("%{SCHEMA}", tidy(table.schema))
+            .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
+            .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
             .replace("%{TABLE}", tidy(table.name))
             .replace("-%{PART}", "");
 
@@ -119,7 +118,7 @@ public class SqlServerAvroFns implements AvroFns {
       .map(col -> {
         // Use column name string not JDBC type val to avoid mappings
         if (stringDate && col.typeName.equals("datetime")) {
-          return String.format(Locale.CANADA, "CONVERT(varchar, [%s], %d) AS [%s%s]",
+          return String.format(Locale.ROOT, "CONVERT(varchar, [%s], %d) AS [%s%s]",
             col.name,
             STRING_DATE_CONVERSION,
             col.name,
@@ -132,12 +131,12 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   private String tidy(final String name) {
-    if (tidyTables) {
+    if (name != null && tidyTables) {
       return name
         .replaceAll("[^a-zA-Z0-9]", " ")
         .replaceAll("\\s", "_")
         .trim()
-        .toLowerCase(Locale.CANADA);
+        .toLowerCase(Locale.ROOT);
     } else {
       return name;
     }

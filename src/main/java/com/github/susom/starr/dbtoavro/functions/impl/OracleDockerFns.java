@@ -33,7 +33,7 @@ public class OracleDockerFns extends DockerFns {
     }
     return dockerService.exec(containerId,
         "impdp",
-        String.format(Locale.CANADA, "userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
+        String.format(Locale.ROOT, "userid=%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
         (impdpThreads > 0) ? "PARALLEL=" + impdpThreads : "",
         "PARFILE=/backup/" + backupFiles.get(0)
@@ -51,9 +51,9 @@ public class OracleDockerFns extends DockerFns {
     LOGGER.debug("Executing SQL in {}", path);
     return dockerService.exec(containerId,
         "sqlplus", "-s",
-        String.format(Locale.CANADA, "%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
+        String.format(Locale.ROOT, "%s/%s@//0.0.0.0:1521/ORCLPDB1", config.getString("database.user"),
             config.getString("database.password")),
-        String.format(Locale.CANADA, "@/%s", path)
+        String.format(Locale.ROOT, "@/%s", path)
     );
   }
 

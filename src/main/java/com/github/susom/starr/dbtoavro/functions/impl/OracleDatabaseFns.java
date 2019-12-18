@@ -146,8 +146,8 @@ public class OracleDatabaseFns extends DatabaseFns {
         .argString(table)
         .queryLongOrZero();
 
-      // Number of rows
-      String sql = String.format(Locale.CANADA, "SELECT COUNT(*) FROM %s", table);
+      // Approximate number of rows
+      String sql = String.format(Locale.ROOT, "SELECT COUNT(*) * 100 FROM %s SAMPLE BLOCK (1)", table);
       long rows = db.get().toSelect(sql).queryLongOrZero();
 
       return new Table(catalog, schema, table, cols, bytes, rows);
