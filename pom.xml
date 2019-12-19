@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>db-to-avro</artifactId>
-  <version>1.5</version>
+  <version>1.6-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Starr Core Database To Avro Utility</name>
@@ -173,8 +173,4 @@
       </plugin>
     </plugins>
   </build>
-
-  <scm>
-    <tag>v1.0.14</tag>
-  </scm>
 </project>
