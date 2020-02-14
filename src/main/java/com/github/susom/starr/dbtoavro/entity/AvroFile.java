@@ -7,20 +7,20 @@ import java.util.List;
  */
 public class AvroFile {
 
-  public Query query;
+  public Table table;
+  public String query;
   public List<String> files;
-  public String startTime;
-  public String endTime;
-  public long bytes;
-  public long rows;
+  public long exportTimeMs;
+  public long totalBytes;
+  public long totalRows;
 
-  public AvroFile(Query query, List<String> files, String startTime, String endTime, long bytes, long rows) {
+  public AvroFile(Table table, String query, List<String> files, long exportTimeMs, long totalBytes, long totalRows) {
+    this.table = table;
     this.query = query;
     this.files = files;
-    this.startTime = startTime;
-    this.endTime = endTime;
-    this.bytes = bytes;
-    this.rows = rows;
+    this.exportTimeMs = exportTimeMs;
+    this.totalBytes = totalBytes;
+    this.totalRows = totalRows;
   }
 
 }

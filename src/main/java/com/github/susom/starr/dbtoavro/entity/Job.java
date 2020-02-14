@@ -39,16 +39,18 @@ public class Job {
   public final String preSql;
   public final Flavor flavor;
   public final String destination;
+  public final String logfile;
   public final String timezone;
-  public final Boolean stringDate;
-  public final String stringDateSuffix;
+  public final Boolean stringDatetime;
+  public final String stringDatetimeSuffix;
+  public final String filenamePattern;
   public final int fetchRows;
   public final int avroSize;
   public final String codec;
   public final boolean tidyTables;
 
-  // Job files
   public List<AvroFile> avro;
+  public long runtimeMs;
 
   public Job(Builder builder) {
     this.id = builder.id;
@@ -64,9 +66,11 @@ public class Job {
     this.preSql = builder.preSql;
     this.flavor = builder.flavor;
     this.destination = builder.destination;
+    this.logfile = builder.logfile;
     this.timezone = builder.timezone;
-    this.stringDate = builder.stringDate;
-    this.stringDateSuffix = builder.stringDateSuffix;
+    this.stringDatetime = builder.stringDatetime;
+    this.stringDatetimeSuffix = builder.stringDatetimeSuffix;
+    this.filenamePattern = builder.filenamePattern;
     this.fetchRows = builder.fetchRows;
     this.avroSize = builder.avroSize;
     this.codec = builder.codec;
@@ -88,9 +92,11 @@ public class Job {
     private String preSql;
     private Flavor flavor;
     private String destination;
+    private String logfile;
     private String timezone;
-    private Boolean stringDate;
-    private String stringDateSuffix;
+    private Boolean stringDatetime;
+    private String stringDatetimeSuffix;
+    private String filenamePattern;
     private int fetchRows;
     private int avroSize;
     private String codec;
@@ -168,18 +174,28 @@ public class Job {
       return this;
     }
 
+    public Builder logfile(String logfile) {
+      this.logfile = logfile;
+      return this;
+    }
+
     public Builder timezone(String timezone) {
       this.timezone = timezone;
       return this;
     }
 
-    public Builder stringDate(boolean stringDate) {
-      this.stringDate = stringDate;
+    public Builder stringDatetime(boolean stringDatetime) {
+      this.stringDatetime = stringDatetime;
       return this;
     }
 
-    public Builder stringDateSuffix(String stringDateSuffix) {
-      this.stringDateSuffix = stringDateSuffix;
+    public Builder stringDatetimeSuffix(String stringDatetimeSuffix) {
+      this.stringDatetimeSuffix = stringDatetimeSuffix;
+      return this;
+    }
+
+    public Builder filenamePattern(String filenamePattern) {
+      this.filenamePattern = filenamePattern;
       return this;
     }
 

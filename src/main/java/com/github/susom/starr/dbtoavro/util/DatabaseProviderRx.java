@@ -36,15 +36,17 @@ import com.github.susom.database.Transaction;
 import com.github.susom.database.TransactionImpl;
 import io.reactivex.Completable;
 import io.reactivex.Maybe;
-import io.reactivex.exceptions.Exceptions;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.annotation.CheckReturnValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import shaded.com.github.susom.database.shaded.com.zaxxer.hikari.HikariDataSource;
 
 
 /**
@@ -59,6 +61,7 @@ import org.slf4j.LoggerFactory;
  * @author garricko
  */
 public class DatabaseProviderRx implements Supplier<Database> {
+  private static final AtomicInteger poolNameCounter = new AtomicInteger(1);
 
   private static final Logger log = LoggerFactory.getLogger(DatabaseProviderRx.class);
   private final Options options;
@@ -106,7 +109,8 @@ public class DatabaseProviderRx implements Supplier<Database> {
    */
   @CheckReturnValue
   public static DatabaseProviderRx.Builder pooledBuilder(Config config) {
-    return fromPool(DatabaseProvider.createPool(config));
+    //return fromPool(DatabaseProvider.createPool(config));
+    return fromPool(createPool(config));
   }
 
   /**
@@ -188,9 +192,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         try {
           code.run(this);
           complete = true;
+        } catch (ThreadDeath | DatabaseException t) {
+          throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        } finally {
+        }
+        finally {
           if (!complete) {
             rollbackAndClose();
           } else {
@@ -217,11 +224,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         try {
           code.run(this, tx);
           complete = true;
-        } catch (DatabaseException t) {
+        } catch (ThreadDeath | DatabaseException t) {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        } finally {
+        }
+        finally {
           if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
             rollbackAndClose();
           } else {
@@ -248,9 +256,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         try {
           returnValue = code.run(this);
           complete = true;
+        } catch (ThreadDeath | DatabaseException t) {
+          throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        } finally {
+        }
+        finally {
           if (!complete) {
             rollbackAndClose();
           } else {
@@ -282,11 +293,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         try {
           returnValue = code.run(this, tx);
           complete = true;
-        } catch (DatabaseException t) {
+        } catch (ThreadDeath | DatabaseException t) {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        } finally {
+        }
+        finally {
           if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
             rollbackAndClose();
           } else {
@@ -678,4 +690,53 @@ public class DatabaseProviderRx implements Supplier<Database> {
       }
     }
   }
+
+  /*
+  TODO: Temporary override while debugging network timeouts
+   */
+  public static Pool createPool(Config config) {
+    String url = config.getString("database.url");
+    if (url == null) {
+      throw new DatabaseException("You must provide database.url");
+    }
+
+    HikariDataSource ds = new HikariDataSource();
+    // If we don't provide a pool name it will automatically generate one, but
+    // the way it does that requires PropertyPermission("*", "read,write") and
+    // will fail if the security sandbox is enabled
+    ds.setPoolName(config.getString("database.pool.name", "HikariPool-" + poolNameCounter.getAndAdd(1)));
+    ds.setJdbcUrl(url);
+    String driverClassName = config.getString("database.driver.class", Flavor.driverForJdbcUrl(url));
+    ds.setDriverClassName(driverClassName);
+    ds.setUsername(config.getString("database.user"));
+    ds.setPassword(config.getString("database.password"));
+    int poolSize = config.getInteger("database.pool.size", 10);
+    ds.setMaximumPoolSize(poolSize);
+    ds.setAutoCommit(false);
+
+    Flavor flavor;
+    String flavorString = config.getString("database.flavor");
+    if (flavorString != null) {
+      flavor = Flavor.valueOf(flavorString);
+    } else {
+      flavor = Flavor.fromJdbcUrl(url);
+    }
+
+    //TODO
+    // oracle.net.CONNECT_TIMEOUT etc
+    // database.driver.properties=oracle.net.CONNECT_TIMEOUT,oracle.net.READ_TIMEOUT,oracle.jdbc.ReadTimeout
+    // try string see if breaks
+    if (flavor == Flavor.oracle) {
+      Properties properties = new Properties();
+      properties.put("oracle.net.CONNECT_TIMEOUT", 3600000);
+      properties.put("oracle.net.READ_TIMEOUT", 3600000);
+      properties.put("oracle.jdbc.ReadTimeout", 3600000);
+      ds.setDataSourceProperties(properties);
+    }
+
+    log.debug("Created '" + flavor + "' connection pool of size " + poolSize + " using driver " + driverClassName);
+
+    return new Pool(ds, poolSize, flavor, ds);
+  }
+
 }

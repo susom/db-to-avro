@@ -25,15 +25,11 @@ import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx.Builder;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
-import java.sql.CallableStatement;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,31 +39,6 @@ import org.slf4j.LoggerFactory;
 public class SqlServerDatabaseFns extends DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
-
-  private static int[] serializable = {
-      Types.BIGINT,
-      Types.BINARY,
-      Types.BLOB,
-      Types.CHAR,
-      Types.CLOB,
-      Types.DOUBLE,
-      Types.INTEGER,
-
-    // TODO: Are these used in MSSQL?
-//      Types.FLOAT,
-//      Types.DECIMAL,
-
-      Types.NCHAR,
-      Types.NCLOB,
-      Types.NUMERIC,
-      Types.NVARCHAR,
-      Types.REAL,
-      Types.SMALLINT,
-      Types.TINYINT,
-      Types.TIMESTAMP,
-//      Types.VARBINARY, // This is SpatialLocation in MSSQL
-      Types.VARCHAR
-  };
 
   public SqlServerDatabaseFns(Config config, Builder dbb) {
     super(config, dbb);
@@ -111,13 +82,18 @@ public class SqlServerDatabaseFns extends DatabaseFns {
       List<Column> cols = new ArrayList<>();
       try (ResultSet columns = metadata.getColumns(catalog, schema, table, "%")) {
         while (columns.next()) {
-          String colName = columns.getString(4);
-          int type = columns.getInt(5);
-          String typeName = columns.getString(6);
-          boolean serializable = isSerializable(type)
-            && columnExclusions.stream()
-            .noneMatch(re -> (schema + "." + table + "." + colName).matches("(?i:" + re + ")"));
-          cols.add(new Column(colName, type, typeName, serializable));
+          String name = columns.getString(4);
+          int jdbcType = columns.getInt(5);
+          String vendorType = columns.getString(6);
+          boolean supported = isSupported(jdbcType);
+          boolean exclude = columnExclusions.stream()
+            .anyMatch(re -> (schema + "." + table + "." + name).matches("(?i:" + re + ")"));
+          cols.add(new Column(name, jdbcType, vendorType, supported, exclude));
+          if (!supported) {
+            LOGGER
+              .debug("[{}].[{}].[{}] has unsupported type {} ({})",
+                schema, table, name, vendorType, jdbcType);
+          }
         }
         // Get primary keys
         try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
@@ -128,35 +104,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
         }
       }
 
-      // Size of table in bytes
-      long bytes = 0;
-      try (CallableStatement spaceUsed = db.get().underlyingConnection()
-          .prepareCall("{call sp_spaceused(?)}")) {
-        spaceUsed.setString(1, schema + "." + table);
-        if (spaceUsed.execute()) {
-          try (ResultSet rs = spaceUsed.getResultSet()) {
-            while (rs.next()) {
-              bytes = Long.parseLong(rs.getString(4).replace(" KB", "")) * 1000;
-            }
-          }
-        }
-      } catch (SQLException expected) {
-        LOGGER.trace("Unable to use sp_spaceused to determine table size", expected);
-      }
-
-      // Number of rows
-      long rows = db.get().toSelect("SELECT SUM(PARTITIONS.rows) AS rows\n"
-          + "FROM sys.objects OBJECTS\n"
-          + "         INNER JOIN sys.partitions PARTITIONS ON OBJECTS.object_id = PARTITIONS.object_id\n"
-          + "WHERE OBJECTS.type = 'U'\n"
-          + "  AND PARTITIONS.index_id < 2\n"
-          + "  AND SCHEMA_NAME(OBJECTS.schema_id) = ?\n"
-          + "  AND OBJECTS.Name = ?")
-          .argString(schema)
-          .argString(table)
-          .queryLongOrZero();
-
-      return new Table(catalog, schema, table, cols, bytes, rows);
+      return new Table(catalog, schema, table, cols);
 
     }).toSingle();
   }
@@ -255,10 +203,6 @@ public class SqlServerDatabaseFns extends DatabaseFns {
               sql.append("FILE=1, REPLACE, STATS=1");
               return Single.just(sql.toString());
             });
-  }
-
-  private boolean isSerializable(int type) {
-    return IntStream.of(serializable).anyMatch(x -> x == type);
   }
 
 }

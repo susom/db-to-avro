@@ -49,6 +49,7 @@ public class Main {
   private static final int DEFAULT_FETCH_COUNT = 2000;
   private static final String DEFAULT_DATETIME_COLUMN_SUFFIX = "__dt_str";
   private static final String DEFAULT_AVRO_CODEC = "snappy";
+  private static final String DEFAULT_FILENAME_PATTERN = "%{SCHEMA}.%{TABLE}.avro";
 
   public static void main(String[] args) {
     // Make sure we use the real console for error logging here because something
@@ -140,13 +141,18 @@ public class Main {
       .availableUnless(connectionOpt)
       .withRequiredArg();
 
-    OptionSpec<Boolean> stringDateOpt = parser
-      .accepts("date-string", "Convert Oracle(Date) or SQLServer(DateTime) types to ISO-8601 string")
+    OptionSpec<Boolean> stringDatetimeOpt = parser
+      .accepts("datetime-string", "Convert Oracle(Date) or SQLServer(DateTime) types to ISO-8601 string")
       .withRequiredArg()
       .ofType(Boolean.class);
 
-    OptionSpec<String> dateStringSuffixOpt = parser.accepts("date-string-suffix",
-      "Append this column name suffix to columns that have been converted with --date-string")
+    OptionSpec<String> datetimeStringSuffixOpt = parser.accepts("datetime-string-suffix",
+      "Append this column name suffix to columns that have been converted with --datetime-string")
+      .withRequiredArg()
+      .ofType(String.class);
+
+    OptionSpec<String> filenamePatternOpt = parser.accepts("filename-pattern",
+      "File naming pattern, default is %{SCHEMA}.%{TABLE}-%{PART}.avro")
       .withRequiredArg()
       .ofType(String.class);
 
@@ -161,8 +167,18 @@ public class Main {
       .withRequiredArg()
       .ofType(String.class);
 
+    OptionSpec<String> logFileOpt = parser
+      .accepts("log-file",  "Output JSON log file path")
+      .withRequiredArg()
+      .ofType(String.class);
+
     OptionSpec<Integer> avroSizeOpt = parser
-      .accepts("avro-size", "Target number of database bytes to write per Avro file (will vary if Avro compression enabled)")
+      .accepts("avro-size", "Target .avro file size before splitting (default: unlimited)")
+      .withRequiredArg()
+      .ofType(Integer.class);
+
+    OptionSpec<Integer> threadsOpt = parser
+      .accepts("threads", "Number of parallel threads (default is core count)")
       .withRequiredArg()
       .ofType(Integer.class);
 
@@ -189,14 +205,19 @@ public class Main {
         fetchRowCount = optionSet.valueOf(fetchRowCountOpt);
       }
 
-      boolean stringDate = config.getBooleanOrFalse("date.string");
-      if (optionSet.has(stringDateOpt)) {
-        stringDate = optionSet.valueOf(stringDateOpt);
+      boolean stringDatetime = config.getBooleanOrFalse("datetime.string");
+      if (optionSet.has(stringDatetimeOpt)) {
+        stringDatetime = optionSet.valueOf(stringDatetimeOpt);
       }
 
-      String stringDateSuffix = config.getString("date.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
-      if (optionSet.has(dateStringSuffixOpt)) {
-        stringDateSuffix = optionSet.valueOf(dateStringSuffixOpt);
+      String stringDatetimeSuffix = config.getString("datetime.string.suffix", DEFAULT_DATETIME_COLUMN_SUFFIX);
+      if (optionSet.has(datetimeStringSuffixOpt)) {
+        stringDatetimeSuffix = optionSet.valueOf(datetimeStringSuffixOpt);
+      }
+
+      String filenamePattern = config.getString("filename.pattern", DEFAULT_FILENAME_PATTERN);
+      if (optionSet.has(filenamePatternOpt)) {
+        filenamePattern = optionSet.valueOf(filenamePatternOpt);
       }
 
       String flavor = optionSet.valueOf(flavorOpt).toLowerCase(Locale.ROOT);
@@ -226,29 +247,62 @@ public class Main {
         avroSize = optionSet.valueOf(avroSizeOpt);
       }
 
-      // Keep database connection strings as properties-only, so they don't show up in job logs
+      String logFile = config.getString("logfile");
+      if (optionSet.has(logFileOpt)) {
+        logFile = optionSet.valueOf(logFileOpt);
+      }
+
+      // Keep some database connection strings as properties-only, so they don't show up in job logs
       ConfigFrom finalConfiguration = Config.from().config(config);
 
       String connection = config.getString(flavor + ".database.url");
       if (optionSet.has(connectionOpt)) {
-        connection = optionSet.valueOf(connectionOpt);
+        if (connection != null) {
+          parser.printHelpOn(System.out);
+          System.err.println("\nCommand-line connection string cannot override properties file");
+          exit(1);
+        } else {
+          finalConfiguration.value("database.url", optionSet.valueOf(connectionOpt));
+        }
       }
-      finalConfiguration.value("database.url", connection);
 
-      String databaseUser = config.getString(flavor + ".database.user");
       if (optionSet.has(userOpt)) {
-        databaseUser = optionSet.valueOf(userOpt);
+        String databaseUser = config.getString(flavor + ".database.user");
+        if (databaseUser != null) {
+          parser.printHelpOn(System.out);
+          System.err.println("\nCommand-line database username cannot override properties file");
+          exit(1);
+        } else {
+          finalConfiguration.value("database.user", optionSet.valueOf(userOpt));
+        }
       }
-      finalConfiguration.value("database.user", databaseUser);
 
       String databasePassword = config.getString(flavor + ".database.password");
       if (optionSet.has(passwordOpt)) {
-        databasePassword = optionSet.valueOf(passwordOpt);
+        if (databasePassword != null) {
+          parser.printHelpOn(System.out);
+          System.err.println("\nCommand-line database password cannot override properties file");
+          exit(1);
+        } else {
+          databasePassword = optionSet.valueOf(passwordOpt);
+        }
       } else if (optionSet.has(passwordFileOpt)) {
-        databasePassword = new String(Files.readAllBytes(optionSet.valueOf(passwordFileOpt).toPath()),
-          Charset.defaultCharset());
+        if (databasePassword != null) {
+          parser.printHelpOn(System.out);
+          System.err.println("\nCommand-line database password file cannot override properties file");
+          exit(1);
+        } else {
+          databasePassword = new String(Files.readAllBytes(optionSet.valueOf(passwordFileOpt).toPath()),
+            Charset.defaultCharset());
+        }
       }
       finalConfiguration.value("database.password", databasePassword);
+
+      int threads = config.getInteger("database.pool.size", Runtime.getRuntime().availableProcessors());
+      if (optionSet.has(threadsOpt)) {
+        threads = optionSet.valueOf(threadsOpt);
+      }
+      finalConfiguration.value("database.pool.size", String.valueOf(threads));
 
       config = finalConfiguration.get();
 
@@ -275,10 +329,12 @@ public class Main {
         .timezone(System.getProperty("user.timezone"))
         .fetchRows(fetchRowCount)
         .avroSize(avroSize)
-        .stringDate(stringDate)
+        .stringDatetime(stringDatetime)
+        .stringDatetimeSuffix(stringDatetimeSuffix)
         .tidyTables(tidyTables)
         .codec(codec)
-        .stringDateSuffix(stringDateSuffix);
+        .filenamePattern(filenamePattern)
+        .logfile(logFile);
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 
@@ -332,7 +388,9 @@ public class Main {
     return Config.from()
       .propertyFile(properties.split(File.pathSeparator))
       .systemProperties()
-      .substitutions(subs).get();
+      .substitutions(subs)
+      .excludeKeys("database.pool.size") // we calculate this
+      .get();
   }
 
 }

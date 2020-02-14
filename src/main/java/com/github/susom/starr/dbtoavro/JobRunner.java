@@ -18,24 +18,23 @@
 package com.github.susom.starr.dbtoavro;
 
 import com.github.susom.database.Config;
+import com.github.susom.starr.dbtoavro.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.jobs.impl.AvroExporter;
-import com.github.susom.starr.dbtoavro.jobs.impl.OracleLoadDataPump;
-import com.github.susom.starr.dbtoavro.jobs.impl.OracleLoadDatabase;
-import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadBackup;
-import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadDatabase;
+import com.github.susom.starr.dbtoavro.jobs.impl.*;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Master job runner
@@ -52,10 +51,10 @@ public class JobRunner {
     this.config = config;
     this.job = job;
     this.dbb = DatabaseProviderRx
-        .pooledBuilder(config)
-        .withSqlInExceptionMessages()
-        .withConnectionAccess()
-        .withSqlParameterLogging();
+      .pooledBuilder(config)
+      .withSqlInExceptionMessages()
+      .withConnectionAccess()
+      .withSqlParameterLogging();
   }
 
   /**
@@ -64,8 +63,6 @@ public class JobRunner {
    * @return completable
    */
   public Completable run() {
-
-    String outputFile = config.getString("avro.logfile", "log.json");
 
     Loader loader;
     switch (job.flavor) {
@@ -84,20 +81,32 @@ public class JobRunner {
         }
         break;
       default:
-        return Completable.error(new IllegalArgumentException("Unimplemented database " + job.flavor));
+        return Completable
+          .error(new IllegalArgumentException("Unimplemented database " + job.flavor));
     }
 
     if (job.destination != null) {
       Gson gson = new GsonBuilder().setPrettyPrinting().create();
+      long startTime = System.nanoTime();
       return new AvroExporter(config, dbb).run(job, loader)
-          .toList()
-          .doOnSuccess(avro -> {
-            job.avro = avro;
-            Path output = Paths.get(job.destination , outputFile);
-            Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
-            LOGGER.info("Wrote files to {}", outputFile);
-          })
-          .ignoreElement();
+        .toList()
+        .doOnSuccess(avro -> {
+          job.avro = avro;
+          job.runtimeMs = (System.nanoTime() - startTime) / 1000000;
+          Path output = Paths.get(job.logfile);
+          Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8));
+          LOGGER.info("Wrote {}", job.logfile);
+          for (AvroFile avroFile : job.avro) {
+            if (avroFile.table.columns.stream().anyMatch(c -> !c.supported)) {
+              LOGGER.warn(String.format(Locale.ROOT, "Table %s had unsupported columns [%s]",
+                avroFile.table.name, avroFile.table.columns.stream()
+                  .filter(c -> !c.supported)
+                  .map(c -> c.name + " (" + c.vendorType + "," + c.jdbcType + ")")
+                  .collect(Collectors.joining(", "))));
+            }
+          }
+        })
+        .ignoreElement();
     } else {
       LOGGER.info("No destination, not exporting avro");
       return loader.run(job).ignoreElement().andThen(loader.stop());

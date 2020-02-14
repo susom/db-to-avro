@@ -26,8 +26,10 @@ import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.io.File;
+import java.sql.Types;
 import java.util.List;
 import java.util.Scanner;
+import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +39,33 @@ public abstract class DatabaseFns {
 
   protected final Config config;
   protected final DatabaseProviderRx.Builder dbb;
+
+  protected final static int[] supportedTypes = {
+    Types.BIGINT,
+    Types.BINARY,
+    Types.BIT,
+    Types.BLOB,
+    Types.CHAR,
+    Types.CLOB,
+    Types.DATE,
+    Types.DECIMAL,
+    Types.DOUBLE,
+    Types.FLOAT,
+    Types.INTEGER,
+    Types.LONGNVARCHAR,
+    Types.LONGVARBINARY,
+    Types.LONGVARCHAR,
+    Types.NCHAR,
+    Types.NCLOB,
+    Types.NUMERIC,
+    Types.NVARCHAR,
+    Types.REAL,
+    Types.SMALLINT,
+    Types.TIMESTAMP,
+    Types.TINYINT,
+    Types.VARBINARY,
+    Types.VARCHAR
+  };
 
   public DatabaseFns(Config config, DatabaseProviderRx.Builder dbb) {
     this.config = config;
@@ -137,6 +166,10 @@ public abstract class DatabaseFns {
     return dbb.transactRx(db -> {
       db.get().ddl(sql).execute();
     });
+  }
+
+  protected boolean isSupported(int jdbcType) {
+    return IntStream.of(supportedTypes).anyMatch(x -> x == jdbcType);
   }
 
 }

@@ -5,17 +5,23 @@ package com.github.susom.starr.dbtoavro.entity;
  */
 public class Column {
 
-  public String name;
-  public int type;
-  public String typeName;
+  public final String name;
+  public final int jdbcType;
+  public final String vendorType;
   public boolean primaryKey;
-  public boolean serializable; // if false, this column will not be exported
+  public final boolean supported;
+  public final boolean excluded;
 
-  public Column(String name, int type, String typeName, boolean serializable) {
+  public Column(String name, int jdbcType, String vendorType, boolean supported, boolean excluded) {
     this.name = name;
-    this.type = type;
-    this.typeName = typeName;
-    this.serializable = serializable;
+    this.jdbcType = jdbcType;
+    this.vendorType = vendorType;
+    this.supported = supported;
+    this.excluded = excluded;
+  }
+
+  public boolean isExportable() {
+    return (this.supported && !this.excluded);
   }
 
 }

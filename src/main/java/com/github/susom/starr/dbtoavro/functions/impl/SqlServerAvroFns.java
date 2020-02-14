@@ -2,20 +2,20 @@ package com.github.susom.starr.dbtoavro.functions.impl;
 
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
+import com.github.susom.starr.dbtoavro.entity.Column;
 import com.github.susom.starr.dbtoavro.entity.Job;
-import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Single;
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.file.CodecFactory;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,25 +30,48 @@ public class SqlServerAvroFns implements AvroFns {
   private boolean tidyTables;
   private boolean stringDate;
   private String stringDateSuffix;
+  private String filenamePattern;
+  private String destination;
+  private int avroSize;
 
   public SqlServerAvroFns(Job job, DatabaseProviderRx.Builder dbb) {
     this.dbb = dbb;
     this.fetchSize = job.fetchRows;
     this.codec = CodecFactory.fromString(job.codec);
     this.tidyTables = job.tidyTables;
-    this.stringDate = job.stringDate;
-    this.stringDateSuffix = job.stringDateSuffix;
+    this.stringDate = job.stringDatetime;
+    this.stringDateSuffix = job.stringDatetimeSuffix;
+    this.avroSize = job.avroSize;
+    this.filenamePattern = job.filenamePattern;
+    this.destination = job.destination;
   }
 
   @Override
-  public Single<AvroFile> saveAsAvro(final Query query) {
+  public Single<AvroFile> saveAsAvro(final Table table) {
+    if (table.columns.stream().noneMatch(Column::isExportable)) {
+      LOGGER.warn("Skipping table {}, no columns are exportable", table.name);
+      return Single.just(new AvroFile(table, null, new ArrayList<>(), 0, 0, 0));
+    }
     return dbb.transactRx(db -> {
 
-      String startTime = DateTime.now().toString();
-      db.get().underlyingConnection().setCatalog(query.table.catalog);
+      long startTime = System.nanoTime();
+      db.get().underlyingConnection().setCatalog(table.catalog);
 
-      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(query.sql))
-        .asAvro(query.path, query.table.schema, query.table.name)
+      // Only dump the supported column types
+      String columns = getColumnSql(table);
+
+      String sql = String
+          .format(Locale.ROOT, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
+            table.name);
+
+      String path = filenamePattern
+        .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
+        .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
+        .replace("%{TABLE}", tidy(table.name));
+
+      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql))
+        .asAvro(Paths.get(destination, path).toString()
+          , table.schema, table.name)
         .withCodec(codec)
         .fetchSize(fetchSize);
 
@@ -56,68 +79,37 @@ public class SqlServerAvroFns implements AvroFns {
         avro = avro.tidyNames();
       }
 
-      List<String> paths = new ArrayList<>();
-      long rows = 0;
-      if (query.batchSize > 0) {
-        LOGGER.info("Writing {}", query.path);
-        Map<String, Long> output = avro.start(query.batchSize);
+      List<String> files = new ArrayList<>();
+      long totalRows = 0;
+      long totalBytes = 0;
+      LOGGER.info("Writing {}", path);
+      if (avroSize > 0) {
+        Map<String, Long> output = avro.start(avroSize);
         for (Map.Entry<String, Long> entry : output.entrySet()) {
-          paths.add(entry.getKey());
-          rows += entry.getValue();
+          files.add(entry.getKey());
+          totalRows += entry.getValue();
+          totalBytes += new File(entry.getKey()).length();
         }
       } else {
-        LOGGER.info("Writing {}", query.path);
-        rows = avro.start();
-        paths.add(query.path);
+        totalRows = avro.start();
+        files.add(path);
       }
 
-      String endTime = DateTime.now().toString();
-
-      return new AvroFile(query, paths, startTime, endTime, new File(query.path).length(), rows);
+      return new AvroFile(table, sql, files, (System.nanoTime() - startTime) / 1000000, totalBytes, totalRows);
 
     }).toSingle();
   }
 
-  @Override
-  public Single<Query> query(final Table table, final long targetSize, final String pathPattern) {
-    return Single.create(emitter -> {
-        // Only dump the supported column types
-        String columns = getColumnSql(table);
-
-        String sql = String
-          .format(Locale.ROOT, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
-            table.name);
-
-        String path;
-
-        long rowsPerFile = 0;
-        if (targetSize > 0 && table.bytes > 0 && table.rows > 0 && table.bytes > targetSize) {
-          path = pathPattern
-            .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
-            .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
-            .replace("%{TABLE}", tidy(table.name));
-          rowsPerFile = (targetSize) / (table.bytes / table.rows);
-        } else {
-          path = pathPattern
-            .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
-            .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
-            .replace("%{TABLE}", tidy(table.name))
-            .replace("-%{PART}", "");
-
-        }
-
-        emitter.onSuccess(new Query(table, sql, rowsPerFile, path));
-
-      }
-    );
-  }
-
   private String getColumnSql(Table table) {
     return table.columns.stream()
-      .filter(col -> col.serializable)
+      .filter(Column::isExportable)
       .map(col -> {
-        // Use column name string not JDBC type val to avoid mappings
-        if (stringDate && col.typeName.equals("datetime")) {
+        // Use column name string not JDBC type val to avoid sqlserver->jdbc mappings
+        if (stringDate &&
+          (col.vendorType.equals("datetime") ||
+            col.vendorType.equals("datetime2") ||
+            col.vendorType.equals("smalldatetime"))
+        ) {
           return String.format(Locale.ROOT, "CONVERT(varchar, [%s], %d) AS [%s%s]",
             col.name,
             STRING_DATE_CONVERSION,

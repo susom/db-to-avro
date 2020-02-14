@@ -1,5 +1,4 @@
 package com.github.susom.starr.dbtoavro.entity;
-
 import java.util.List;
 
 /**
@@ -7,20 +6,16 @@ import java.util.List;
  */
 public class Table {
 
-  public String catalog;
-  public String schema;
-  public String name;
-  public long bytes;
-  public long rows;
-  public List<Column> columns;
+  public final String catalog;
+  public final String schema;
+  public final String name;
+  public final List<Column> columns;
 
-  public Table(String catalog, String schema, String name, List<Column> columns, long bytes, long rows) {
+  public Table(String catalog, String schema, String name, List<Column> columns) {
     this.catalog = catalog;
     this.schema = schema;
     this.name = name;
     this.columns = columns;
-    this.bytes = bytes;
-    this.rows = rows;
   }
 
 }

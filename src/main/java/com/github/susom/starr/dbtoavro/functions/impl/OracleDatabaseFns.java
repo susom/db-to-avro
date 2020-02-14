@@ -25,13 +25,11 @@ import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx.Builder;
 import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.sql.DatabaseMetaData;
+import java.sql.JDBCType;
 import java.sql.ResultSet;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,27 +39,6 @@ import org.slf4j.LoggerFactory;
 public class OracleDatabaseFns extends DatabaseFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(OracleDatabaseFns.class);
-  private static int[] serializable = {
-    Types.BIGINT,
-    Types.BINARY,
-    Types.BLOB,
-    Types.CHAR,
-    Types.CLOB,
-    Types.DOUBLE,
-    Types.DECIMAL,
-    Types.FLOAT,
-    Types.INTEGER,
-    Types.NCHAR,
-    Types.NCLOB,
-    Types.NUMERIC,
-    Types.NVARCHAR,
-    Types.REAL,
-    Types.SMALLINT,
-    Types.TINYINT,
-    Types.TIMESTAMP,
-    Types.VARBINARY,
-    Types.VARCHAR
-  };
 
   public OracleDatabaseFns(Config config, Builder dbb) {
     super(config, dbb);
@@ -69,8 +46,8 @@ public class OracleDatabaseFns extends DatabaseFns {
 
   @Override
   public Observable<String> getSchemas(String catalog) {
-    LOGGER.debug("Enumerating schemas...");
     return dbb.transactRx(db -> {
+      LOGGER.debug("Enumerating schemas...");
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
       try (ResultSet schemas = metadata.getSchemas(null, null)) {
         List<String> schemasList = new ArrayList<>();
@@ -83,25 +60,29 @@ public class OracleDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Single<Table> introspect(String catalog, String schema, String table, List<String> columnExclusions) {
+  public Single<Table> introspect(String catalog, String schema, String table,
+    List<String> columnExclusions) {
     return dbb.transactRx(db -> {
-      db.get().underlyingConnection().setSchema(schema);
+      LOGGER.debug("Introspecting {}", table);
 
+      db.get().underlyingConnection().setSchema(schema);
       DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
 
       // Retrieve columns
       List<Column> cols = new ArrayList<>();
       try (ResultSet columns = metadata.getColumns(catalog, schema, table, "%")) {
         while (columns.next()) {
-          String colName = columns.getString(4);
-          int type = columns.getInt(5);
-          String typeName = columns.getString(6);
-          boolean serializable = isSerializable(type)
-            && columnExclusions.stream()
-            .noneMatch(re -> (schema + "." + table + "." + colName).matches("(?i:" + re + ")"));
-          cols.add(new Column(colName, type, typeName, serializable));
-          if (!isSerializable(type)) {
-            LOGGER.debug("Table {} Column {} Type {} ({}) will be ignored", table, colName, typeName, type);
+          String name = columns.getString(4);
+          int jdbcType = columns.getInt(5);
+          String vendorType = columns.getString(6);
+          boolean supported = isSupported(jdbcType);
+          boolean exclude = columnExclusions.stream()
+            .anyMatch(re -> (schema + "." + table + "." + name).matches("(?i:" + re + ")"));
+          cols.add(new Column(name, jdbcType, vendorType, supported, exclude));
+          if (!supported) {
+            LOGGER
+              .debug("[{}].[{}].[{}] has unsupported type {} ({})",
+                schema, table, name, vendorType, jdbcType);
           }
         }
         // Get primary keys
@@ -113,44 +94,7 @@ public class OracleDatabaseFns extends DatabaseFns {
         }
       }
 
-      // Number of bytes
-      long bytes = db.get().toSelect("\n"
-        + "SELECT SUM(BYTES)\n"
-        + "FROM (SELECT SEGMENT_NAME TABLE_NAME, OWNER, BYTES\n"
-        + "      FROM DBA_SEGMENTS\n"
-        + "      WHERE SEGMENT_TYPE IN ('TABLE', 'TABLE PARTITION', 'TABLE SUBPARTITION')\n"
-        + "      UNION ALL\n"
-        + "      SELECT I.TABLE_NAME, I.OWNER, S.BYTES\n"
-        + "      FROM DBA_INDEXES I,\n"
-        + "           DBA_SEGMENTS S\n"
-        + "      WHERE S.SEGMENT_NAME = I.INDEX_NAME\n"
-        + "        AND S.OWNER = I.OWNER\n"
-        + "        AND S.SEGMENT_TYPE IN ('INDEX', 'INDEX PARTITION', 'INDEX SUBPARTITION')\n"
-        + "      UNION ALL\n"
-        + "      SELECT L.TABLE_NAME, L.OWNER, S.BYTES\n"
-        + "      FROM DBA_LOBS L,\n"
-        + "           DBA_SEGMENTS S\n"
-        + "      WHERE S.SEGMENT_NAME = L.SEGMENT_NAME\n"
-        + "        AND S.OWNER = L.OWNER\n"
-        + "        AND S.SEGMENT_TYPE IN ('LOBSEGMENT', 'LOB PARTITION')\n"
-        + "      UNION ALL\n"
-        + "      SELECT L.TABLE_NAME, L.OWNER, S.BYTES\n"
-        + "      FROM DBA_LOBS L,\n"
-        + "           DBA_SEGMENTS S\n"
-        + "      WHERE S.SEGMENT_NAME = L.INDEX_NAME\n"
-        + "        AND S.OWNER = L.OWNER\n"
-        + "        AND S.SEGMENT_TYPE = 'LOBINDEX')\n"
-        + "WHERE OWNER = ?\n"
-        + "  AND TABLE_NAME = ?\n")
-        .argString(schema)
-        .argString(table)
-        .queryLongOrZero();
-
-      // Approximate number of rows
-      String sql = String.format(Locale.ROOT, "SELECT COUNT(*) * 100 FROM %s SAMPLE BLOCK (1)", table);
-      long rows = db.get().toSelect(sql).queryLongOrZero();
-
-      return new Table(catalog, schema, table, cols, bytes, rows);
+      return new Table(catalog, schema, table, cols);
 
     }).toSingle();
   }
@@ -185,10 +129,6 @@ public class OracleDatabaseFns extends DatabaseFns {
         return tablesList;
       }
     }).toObservable().flatMapIterable(l -> l);
-  }
-
-  private boolean isSerializable(int type) {
-    return IntStream.of(serializable).anyMatch(x -> x == type);
   }
 
 }
