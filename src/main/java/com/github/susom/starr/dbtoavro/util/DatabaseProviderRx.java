@@ -194,8 +194,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        }
-        finally {
+        } finally {
           if (!complete) {
             rollbackAndClose();
           } else {
@@ -226,8 +225,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        }
-        finally {
+        } finally {
           if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
             rollbackAndClose();
           } else {
@@ -258,8 +256,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        }
-        finally {
+        } finally {
           if (!complete) {
             rollbackAndClose();
           } else {
@@ -295,8 +292,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           throw t;
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
-        }
-        finally {
+        } finally {
           if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
             rollbackAndClose();
           } else {

@@ -71,8 +71,7 @@ public class SqlServerAvroFns implements AvroFns {
         .replace("%{TABLE}", tidy(table.name));
 
       Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql))
-        .asAvro(Paths.get(destination, path).toString()
-          , table.schema, table.name)
+        .asAvro(Paths.get(destination, path).toString(), table.schema, table.name)
         .withCodec(codec)
         .fetchSize(fetchSize);
 
