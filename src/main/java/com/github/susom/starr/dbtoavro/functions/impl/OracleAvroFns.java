@@ -8,6 +8,10 @@ import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Single;
+import org.apache.avro.file.CodecFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -15,9 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.avro.file.CodecFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class OracleAvroFns implements AvroFns {
 
@@ -68,8 +69,7 @@ public class OracleAvroFns implements AvroFns {
         .replace("%{TABLE}", tidy(table.name));
 
       Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql))
-        .asAvro(Paths.get(destination, path).toString()
-          , table.schema, table.name)
+        .asAvro(Paths.get(destination, path).toString(), table.schema, table.name)
         .withCodec(codec)
         .fetchSize(fetchSize);
 

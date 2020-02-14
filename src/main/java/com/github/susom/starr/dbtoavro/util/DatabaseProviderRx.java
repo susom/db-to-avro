@@ -48,7 +48,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import shaded.com.github.susom.database.shaded.com.zaxxer.hikari.HikariDataSource;
 
-
 /**
  * If you are calling this from a Vert.x context, be sure to subscribe using vertx RxHelper.blockingScheduler()
  *
@@ -131,7 +130,6 @@ public class DatabaseProviderRx implements Supplier<Database> {
       }
     }, new OptionsDefault(pool.flavor));
   }
-
 
   /**
    * Execute a transaction on the current thread, with default semantics (commit if the code completes successfully, or

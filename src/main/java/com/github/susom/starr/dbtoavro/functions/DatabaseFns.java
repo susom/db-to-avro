@@ -40,7 +40,7 @@ public abstract class DatabaseFns {
   protected final Config config;
   protected final DatabaseProviderRx.Builder dbb;
 
-  protected final static int[] supportedTypes = {
+  protected static final int[] supportedTypes = {
     Types.BIGINT,
     Types.BINARY,
     Types.BIT,

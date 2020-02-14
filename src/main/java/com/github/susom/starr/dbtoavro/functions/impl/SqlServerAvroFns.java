@@ -8,6 +8,10 @@ import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Single;
+import org.apache.avro.file.CodecFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -15,9 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.avro.file.CodecFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SqlServerAvroFns implements AvroFns {
 
@@ -105,11 +106,7 @@ public class SqlServerAvroFns implements AvroFns {
       .filter(Column::isExportable)
       .map(col -> {
         // Use column name string not JDBC type val to avoid sqlserver->jdbc mappings
-        if (stringDate &&
-          (col.vendorType.equals("datetime") ||
-            col.vendorType.equals("datetime2") ||
-            col.vendorType.equals("smalldatetime"))
-        ) {
+        if (stringDate && (col.vendorType.equals("datetime") || col.vendorType.equals("datetime2") || col.vendorType.equals("smalldatetime"))) {
           return String.format(Locale.ROOT, "CONVERT(varchar, [%s], %d) AS [%s%s]",
             col.name,
             STRING_DATE_CONVERSION,
