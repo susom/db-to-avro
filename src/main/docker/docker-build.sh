@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build --no-cache -f Dockerfile -t db-to-avro:latest ../../../
+docker build -f Dockerfile -t db-to-avro:latest ../../../
