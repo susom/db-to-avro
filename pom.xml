@@ -6,11 +6,11 @@
     <groupId>com.github.susom</groupId>
     <artifactId>library-parent</artifactId>
     <version>1.0.3</version>
-    <relativePath/>
+    <relativePath />
   </parent>
 
   <artifactId>db-to-avro</artifactId>
-  <version>1.6-SNAPSHOT</version>
+  <version>1.6</version>
   <packaging>jar</packaging>
 
   <name>Starr Core Database To Avro Utility</name>
@@ -172,4 +172,8 @@
       </plugin>
     </plugins>
   </build>
+
+  <scm>
+    <tag>v1.0.15</tag>
+  </scm>
 </project>
