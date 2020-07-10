@@ -1,3 +1,6 @@
 #!/bin/bash
 
-docker build -f Dockerfile -t db-to-avro:latest ../../../
+# Ensure the bundled jar is available in the Docker context.
+# shellcheck disable=SC2154
+cp "../${project.artifactId}-bundled-${project.version}.jar" .
+docker build -f Dockerfile -t "${docker.registry}db-to-avro:${project.version}-${project.build}" ../../../
