@@ -1,23 +1,26 @@
-## Database Backups to Avro
+== Database Backups to Avro
 
-The goal of this project is to load database backups (eg. Oracle datapump exports, MS Sql Server .bak files) into a
-temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems.
+The goal of this project is to load database backups (eg.
+Oracle datapump exports, MS Sql Server .bak files) into a temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems.
 
-### Current Progress
+=== Current Progress
 
-MSSQL Server backups and Oracle Datapump exports are currently supported. Oracle supports row-level multi-threading for high performance.
+MSSQL Server backups and Oracle Datapump exports are currently supported.
+Oracle supports row-level multi-threading for high performance.
 
-### Architecture
+=== Architecture
 
 On a host running docker, the application will instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
 If a database is already running, the restore step can be skipped by providing a JDBC connection string.
 
-The application is asynchronous and multi-threaded using [RxJava2](https://github.com/ReactiveX/RxJava).
+The application is asynchronous and multi-threaded using https://github.com/ReactiveX/RxJava[RxJava2].
 
-### Basic Command Line Usage
+=== Basic Command Line Usage
 
 MSSQL Server
-```bash
+
+[source,bash]
+----
 java -jar db-to-avro.jar \
    --flavor=sqlserver \
    --backup-dir=backups/ \
@@ -25,27 +28,32 @@ java -jar db-to-avro.jar \
    --catalog=AdventureWorks2016 \
    --schemas=dbo \
    --destination=avro/
-```
+----
+
 This will restore the Microsoft AdventureWorks database from a backup set located in `backups/`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
 All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
 
 Oracle
-```bash
+
+[source,bash]
+----
 java -jar db-to-avro.jar \
    --flavor=oracle \
    --backup-dir=backups/ \
    --backup-files=HR.par
    --schemas=HRDEMO \
    --destination=avro/
-```
+----
+
 This will restore the Oracle HR demo database from a backup set located in `backups/`, using a par file `HR.par`.
 All tables within schema HR will be exported as Avro files to the directory `avro/`
 
-
-### Exporting an Existing Database
+=== Exporting an Existing Database
 
 MSSQL Server
-```bash
+
+[source,bash]
+----
 java -jar db-to-avro.jar \
   --connect="jdbc:sqlserver://localhost" \
   --user="SA" \
@@ -54,10 +62,12 @@ java -jar db-to-avro.jar \
   --catalog=AdventureWorks2016 \
   --schemas=dbo  \
   --destination=avro/
-```
+----
 
 Oracle
-```bash
+
+[source,bash]
+----
 java -jar db-to-avro.jar \
   --connect="jdbc:oracle:thin:@localhost:1521/ORCLPDB1" \
   --user="system" \
@@ -65,15 +75,14 @@ java -jar db-to-avro.jar \
   --flavor=oracle  \
   --schemas=HR  \
   --destination=avro/
-```
+----
 
 These do the same as the above, but instead of loading a database backup, it will use an existing database via the connection string.
 
+=== Command Line Options
 
-
-### Command Line Options
-
-```bash
+[source,bash]
+----
 Option (* = required)    Description
 ---------------------    -----------
 --backup-dir     directory containing backup to restore
@@ -91,11 +100,12 @@ Option (* = required)    Description
 --tables         only export this comma-delimited list of tables
 --user           database user (existing db)
 -h, --help               show help
-```
+----
 
-### Example Configuration Properties
+=== Example Configuration Properties
 
-```java
+[source,java]
+----
 # Application defaults, can be overridden by a job
 #
 # Note ${UUID} is substituted everywhere with the same random UUID at startup time
@@ -138,39 +148,41 @@ avro.tidy=true
 
 # Core-count multiplier determines number of avro threads
 avro.core.multiplier=0.75
-```
+----
 
-### Future Features
+=== Future Features
 
-Currently the application consists of a single module "db-to-avro-runner". More modules in the future can be added to call this runner from a REST API, Pubsub queue, etc.
+Currently the application consists of a single module "db-to-avro-runner".
+More modules in the future can be added to call this runner from a REST API, Pubsub queue, etc.
 
-### TODO, in order of priority:
-
+=== TODO, in order of priority:
 
 * Pass docker database mounts as command line options in addition to properties file
 * Resume features:
-  * Use temp files when writing to disk, rename to final name when complete.
-  * Cancelled/crashed jobs should resume at last table exported
-  * Option: if destination file exists, don't export that table
+ ** Use temp files when writing to disk, rename to final name when complete.
+ ** Cancelled/crashed jobs should resume at last table exported
+ ** Option: if destination file exists, don't export that table
 * Option to save directly to a GCS bucket
 * Support for regex in schema/table/column exclusion filters
 * Get row counts from Avro generation, instead of DB introspection (which is too slow for billions of rows)
-* Ability to restore backup into pre-existing database (eg. from CoS boot creation)
+* Ability to restore backup into pre-existing database (eg.
+from CoS boot creation)
 * Schema introspection should be able to exclude tables that will cause problems like '?' in column name
 * Validation: Number of rows in database should match number of rows written by db-goodies ETL
 * Automation
-  - Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
-  - Job runner that reads VM metadata for job input (?)
-  - Pub/sub job runner (?)
+ ** Ability to self-bootstrap into a new VM created in GCP and monitor output (?)
+ ** Job runner that reads VM metadata for job input (?)
+ ** Pub/sub job runner (?)
 * Formalized progress reporting (not logging)
 * Switches for:
-  * Deleting docker container after successful export
-  * Listing catalogs, schemas, and tables
-  * Testing connection to db
+ ** Deleting docker container after successful export
+ ** Listing catalogs, schemas, and tables
+ ** Testing connection to db
 * Option for saving output as .avro instead of .json, so manifest is included with the dataset itself.
 * Unit tests(!)
 
-### Known Issues
+=== Known Issues
+
 * Table and column names are normalized in db-goodies ETL, which is not reflected in job output log.
 * SQL server is single-threaded (per-table) and is much slower than Oracle (this may not be addressable)
 * Excluded tables are not explicitly noted in job output (they just aren't listed)
