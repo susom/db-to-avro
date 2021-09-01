@@ -27,6 +27,7 @@ import com.github.susom.starr.dbtoavro.jobs.impl.OracleLoadDatabase;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadDatabase;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import java.lang.reflect.Modifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.reactivex.Completable;
@@ -90,7 +91,8 @@ public class JobRunner {
     }
 
     if (job.destination != null) {
-      Gson gson = new GsonBuilder().setPrettyPrinting().create();
+      Gson gson = new GsonBuilder().excludeFieldsWithModifiers(Modifier.TRANSIENT).setPrettyPrinting().create();
+      //excludeFieldsWithoutExposeAnnotation().setPrettyPrinting().create();
       long startTime = System.nanoTime();
       return new AvroExporter(config, dbb).run(job, loader)
         .toList()

@@ -2,9 +2,7 @@ package com.github.susom.starr.dbtoavro.jobs.impl;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.entity.Column;
 import com.github.susom.starr.dbtoavro.entity.Job;
-import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.impl.FnFactory;
@@ -12,7 +10,6 @@ import com.github.susom.starr.dbtoavro.jobs.Exporter;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Observable;
-import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,7 +31,7 @@ public class AvroExporter implements Exporter {
   @Override
   public Observable<AvroFile> run(Job job, Loader loader) {
 
-    int threads = config.getIntegerOrThrow("database.pool.size");
+    int threads = config.getIntegerOrThrow("threads");
     ExecutorService writerPool = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
 
@@ -48,7 +45,7 @@ public class AvroExporter implements Exporter {
               job.schemas.isEmpty()
                 || job.schemas.stream().anyMatch(x -> x.equals(schema)))
             .flatMap(schema ->
-              dbFns.getTables(job.catalog, schema, job.tablePriorities)
+              dbFns.getTables(job.catalog, schema, job.tablesSplit, job.tablePriorities)
                 .filter(table ->
                   job.tables.isEmpty()
                     || job.tables.stream().anyMatch(x -> x.equals(schema + "." + table))
@@ -59,13 +56,14 @@ public class AvroExporter implements Exporter {
                     .noneMatch(re -> (schema + "." + table).matches("(?i:" + re + ")"))
                 )
                 .flatMap(tableName ->
-                  dbFns.introspect(job.catalog, schema, tableName, job.columnExclusions)
-                    .flatMap(avroFns::saveAsAvro)
-                    .subscribeOn(Schedulers.from(writerPool))
-                    .toObservable()
+                  dbFns.getQueries(job.catalog, schema, tableName, job.columnExclusions, job)
+                  .flatMap(query -> avroFns.saveAsAvro(query)
+                  .subscribeOn(Schedulers.from(writerPool))
+                    .toObservable())
                 )
-            );
-      })
+              );
+        }
+      )
       .doOnComplete(writerPool::shutdown);
   }
 

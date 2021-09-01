@@ -1,4 +1,6 @@
 package com.github.susom.starr.dbtoavro.entity;
+
+//import com.google.gson.annotations.Expose;
 import java.util.List;
 
 /**
@@ -9,7 +11,8 @@ public class Table {
   public final String catalog;
   public final String schema;
   public final String name;
-  public final List<Column> columns;
+  //@Expose(serialize = false, deserialize = false)
+  public transient final List<Column> columns;
 
   public Table(String catalog, String schema, String name, List<Column> columns) {
     this.catalog = catalog;

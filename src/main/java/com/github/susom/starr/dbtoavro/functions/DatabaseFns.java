@@ -20,6 +20,8 @@ package com.github.susom.starr.dbtoavro.functions;
 import com.github.susom.database.Config;
 import com.github.susom.database.DatabaseException;
 import com.github.susom.starr.dbtoavro.entity.Database;
+import com.github.susom.starr.dbtoavro.entity.Job;
+import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Completable;
@@ -116,10 +118,23 @@ public abstract class DatabaseFns {
    *
    * @param catalog catalog to query
    * @param schema schema to query
+   * @param splitTables these tables use queries with where clause (oly applicable in Oracle)
    * @param priorities these tables are dumped first
    * @return observable of catalogs
    */
-  public abstract Observable<String> getTables(String catalog, String schema, List<String> priorities);
+  public abstract Observable<String> getTables(String catalog, String schema, List<String> splitTables, List<String> priorities);
+
+  /**
+   * Prepare queries for export for a given table
+   *
+   * @param catalog catalog to query
+   * @param schema schema to query
+   * @param tableName table name
+   * @param columnExclusions column exclusions
+   * @param job job
+   * @return observable of queries
+   */
+  public abstract Observable<Query> getQueries(String catalog, String schema, String tableName, List<String> columnExclusions, Job job);
 
   /**
    * Introspects a database table, required for selecting the appropriate splitting and exporting method.
@@ -130,7 +145,7 @@ public abstract class DatabaseFns {
    * @param columnExclusions excludes any regexes that match against schema.table.column
    * @return Single of table with row counts, byte sizes, and supported column information
    */
-  public abstract Single<Table> introspect(String catalog, String schema, String table, List<String> columnExclusions);
+  //public abstract Single<Query> introspect(String catalog, String schema, String table, List<String> columnExclusions, String query);
 
   public abstract Single<String> getRestoreSql(String catalog, List<String> backupFiles);
 

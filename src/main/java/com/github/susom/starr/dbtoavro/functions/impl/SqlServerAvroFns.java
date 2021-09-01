@@ -4,6 +4,7 @@ import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.entity.Column;
 import com.github.susom.starr.dbtoavro.entity.Job;
+import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
@@ -48,30 +49,24 @@ public class SqlServerAvroFns implements AvroFns {
   }
 
   @Override
-  public Single<AvroFile> saveAsAvro(final Table table) {
-    if (table.columns.stream().noneMatch(Column::isExportable)) {
-      LOGGER.warn("Skipping table {}, no columns are exportable", table.name);
+  public Single<AvroFile> saveAsAvro(final Query sql) {
+    Table table = new Table(sql.getCatalog(), sql.getSchema(), sql.getName(), sql.getColumns());
+    
+    if (sql.getColumns().stream().noneMatch(Column::isExportable)) {
+     LOGGER.warn("Skipping table {}, no columns are exportable", sql.getName());
       return Single.just(new AvroFile(table, null, new ArrayList<>(), 0, 0, 0));
     }
     return dbb.transactRx(db -> {
 
       long startTime = System.nanoTime();
-      db.get().underlyingConnection().setCatalog(table.catalog);
-
-      // Only dump the supported column types
-      String columns = getColumnSql(table);
-
-      String sql = String
-          .format(Locale.ROOT, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, table.schema,
-            table.name);
 
       String path = filenamePattern
-        .replace("%{CATALOG}", table.catalog == null ? "catalog" : tidy(table.catalog))
-        .replace("%{SCHEMA}", table.schema == null ? "schema" : tidy(table.schema))
-        .replace("%{TABLE}", tidy(table.name));
+      .replace("%{CATALOG}", sql.getCatalog() == null ? "catalog" : tidy(sql.getCatalog()))
+      .replace("%{SCHEMA}", sql.getSchema() == null ? "schema" : tidy(sql.getSchema()))
+      .replace("%{TABLE}", tidy(sql.getName()));
 
-      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql))
-        .asAvro(Paths.get(destination, path).toString(), table.schema, table.name)
+      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql.query))
+        .asAvro(Paths.get(destination, path).toString(), sql.getSchema(), sql.getName())
         .withCodec(codec)
         .fetchSize(fetchSize);
 
@@ -95,27 +90,9 @@ public class SqlServerAvroFns implements AvroFns {
         files.add(path);
       }
 
-      return new AvroFile(table, sql, files, (System.nanoTime() - startTime) / 1000000, totalBytes, totalRows);
+        return new AvroFile(table, sql.query, files, (System.nanoTime() - startTime) / 1000000, totalBytes, totalRows);
 
     }).toSingle();
-  }
-
-  private String getColumnSql(Table table) {
-    return table.columns.stream()
-      .filter(Column::isExportable)
-      .map(col -> {
-        // Use column name string not JDBC type val to avoid sqlserver->jdbc mappings
-        if (stringDate && (col.vendorType.equals("datetime") || col.vendorType.equals("datetime2") || col.vendorType.equals("smalldatetime"))) {
-          return String.format(Locale.ROOT, "CONVERT(varchar, [%s], %d) AS [%s%s]",
-            col.name,
-            STRING_DATE_CONVERSION,
-            col.name,
-            stringDateSuffix);
-        } else {
-          return "[" + col.name + "]";
-        }
-      })
-      .collect(Collectors.joining(", "));
   }
 
   private String tidy(final String name) {

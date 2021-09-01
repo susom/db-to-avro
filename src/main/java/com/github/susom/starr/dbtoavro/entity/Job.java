@@ -32,7 +32,9 @@ public class Job {
   public final String catalog;
   public final List<String> schemas;
   public final List<String> tables;
+  public final List<String> tablesSplit;
   public final List<String> tablePriorities;
+  public final List<String> unionizeQuery;
   public final List<String> tableExclusions;
   public final List<String> columnExclusions;
   public final String postSql;
@@ -48,6 +50,7 @@ public class Job {
   public final int avroSize;
   public final String codec;
   public final boolean tidyTables;
+  public final boolean continueOnException;
 
   public List<AvroFile> avro;
   public long runtimeMs;
@@ -59,7 +62,9 @@ public class Job {
     this.catalog = builder.catalog;
     this.schemas = builder.schemas;
     this.tables = builder.tables;
+    this.tablesSplit = builder.tablesSplit;
     this.tablePriorities = builder.tablePriorities;
+    this.unionizeQuery = builder.unionizeQuery;
     this.tableExclusions = builder.tableExclusions;
     this.columnExclusions = builder.columnExclusions;
     this.postSql = builder.postSql;
@@ -75,6 +80,7 @@ public class Job {
     this.avroSize = builder.avroSize;
     this.codec = builder.codec;
     this.tidyTables = builder.tidyTables;
+    this.continueOnException = builder.continueOnException;
   }
 
   public static class Builder {
@@ -85,7 +91,9 @@ public class Job {
     private String catalog;
     private List<String> schemas;
     private List<String> tables;
+    private List<String> tablesSplit;
     private List<String> tablePriorities;
+    private List<String> unionizeQuery;
     private List<String> tableExclusions;
     private List<String> columnExclusions;
     private String postSql;
@@ -101,6 +109,7 @@ public class Job {
     private int avroSize;
     private String codec;
     private boolean tidyTables;
+    private boolean continueOnException;
 
     public Builder() {
     }
@@ -139,8 +148,18 @@ public class Job {
       return this;
     }
 
+    public Builder tablesSplit(List<String> tablesSplit) {
+      this.tablesSplit = tablesSplit;
+      return this;
+    }
+    
     public Builder tablePriorities(List<String> tablePriorities) {
       this.tablePriorities = tablePriorities;
+      return this;
+    }
+
+    public Builder unionizeQuery(List<String> unionizeQuery) {
+      this.unionizeQuery = unionizeQuery;
       return this;
     }
 
@@ -216,6 +235,11 @@ public class Job {
 
     public Builder tidyTables(boolean tidyTables) {
       this.tidyTables = tidyTables;
+      return this;
+    }
+
+    public Builder continueOnException(boolean continueOnException) {
+      this.continueOnException = continueOnException;
       return this;
     }
 

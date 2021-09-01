@@ -118,7 +118,17 @@ public class Main {
       .ofType(String.class)
       .withValuesSeparatedBy(',');
 
+    OptionSpec<String> tablesSplitOpt = parser.accepts("split-table", "comma-delimited list of schema.table that should be exported using row id (Oracle)")
+    .withRequiredArg()
+    .ofType(String.class)
+    .withValuesSeparatedBy(',');
+
     OptionSpec<String> tablePrioritiesOpt = parser.accepts("prioritize-table", "comma-delimited list of schema.table that should be exported first")
+      .withRequiredArg()
+      .ofType(String.class)
+      .withValuesSeparatedBy(',');
+
+    OptionSpec<String> unionizeQueryOpt = parser.accepts("unionize-query", "comma-delimited list of schema.table that should be exported first")
       .withRequiredArg()
       .ofType(String.class)
       .withValuesSeparatedBy(',');
@@ -187,6 +197,10 @@ public class Main {
       .ofType(Boolean.class);
 
     OptionSpec<Void> helpOption = parser.acceptsAll(Arrays.asList("h", "help"), "show help").forHelp();
+
+    OptionSpec<Boolean> continueOnExceptionOpt = parser.accepts("continueOnException", "if this argument is supplied, will log the exception and continue, otherwise, come out with failure from the process")
+      .withRequiredArg()
+      .ofType(Boolean.class);
 
     try {
 
@@ -302,7 +316,9 @@ public class Main {
       if (optionSet.has(threadsOpt)) {
         threads = optionSet.valueOf(threadsOpt);
       }
-      finalConfiguration.value("database.pool.size", String.valueOf(threads));
+      finalConfiguration.value("threads", String.valueOf(threads));
+
+      finalConfiguration.value("database.pool.size", String.valueOf(Math.round(threads + (threads * 0.1f))));
 
       config = finalConfiguration.get();
 
@@ -313,7 +329,9 @@ public class Main {
         .catalog(optionSet.valueOf(catalogOpt))
         .schemas(optionSet.valuesOf(schemasOpt))
         .tables(optionSet.valuesOf(tablesOpt))
+        .tablesSplit(optionSet.valuesOf(tablesSplitOpt))
         .tablePriorities(optionSet.valuesOf(tablePrioritiesOpt))
+        .unionizeQuery(optionSet.valuesOf(unionizeQueryOpt))
         .tableExclusions(optionSet.valuesOf(tableExclusionsOpt))
         .columnExclusions(optionSet.valuesOf(columnExclusionsOpt))
         .backupDir(optionSet.valueOf(backupDirOpt))
@@ -334,7 +352,8 @@ public class Main {
         .tidyTables(tidyTables)
         .codec(codec)
         .filenamePattern(filenamePattern)
-        .logfile(logFile);
+        .logfile(logFile)
+        .continueOnException(optionSet.valueOf(continueOnExceptionOpt));
 
       LOGGER.info("Configuration is being loaded from the following sources in priority order:\n" + config.sources());
 

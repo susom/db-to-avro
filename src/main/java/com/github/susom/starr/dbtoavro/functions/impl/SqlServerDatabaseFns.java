@@ -19,6 +19,8 @@ package com.github.susom.starr.dbtoavro.functions.impl;
 
 import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.entity.Column;
+import com.github.susom.starr.dbtoavro.entity.Job;
+import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx.Builder;
@@ -27,8 +29,10 @@ import io.reactivex.Observable;
 import io.reactivex.Single;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +42,7 @@ import org.slf4j.LoggerFactory;
  */
 public class SqlServerDatabaseFns extends DatabaseFns {
 
+  private static int STRING_DATE_CONVERSION = 126;
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerDatabaseFns.class);
 
   public SqlServerDatabaseFns(Config config, Builder dbb) {
@@ -69,69 +74,34 @@ public class SqlServerDatabaseFns extends DatabaseFns {
     }).toObservable().flatMapIterable(l -> l);
   }
 
-  @Override
-  public Single<Table> introspect(String catalog, String schema, String table, List<String> columnExclusions) {
-    return dbb.transactRx(db -> {
-      LOGGER.info("Introspecting table {}", table);
-      db.get().underlyingConnection().setCatalog(catalog);
-      db.get().underlyingConnection().setSchema(schema);
-
-      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-
-      // Retrieve columns
-      List<Column> cols = new ArrayList<>();
-      try (ResultSet columns = metadata.getColumns(catalog, schema, table, "%")) {
-        while (columns.next()) {
-          String name = columns.getString(4);
-          int jdbcType = columns.getInt(5);
-          String vendorType = columns.getString(6);
-          boolean supported = isSupported(jdbcType);
-          boolean exclude = columnExclusions.stream()
-            .anyMatch(re -> (schema + "." + table + "." + name).matches("(?i:" + re + ")"));
-          cols.add(new Column(name, jdbcType, vendorType, supported, exclude));
-          if (!supported) {
-            LOGGER
-              .debug("[{}].[{}].[{}] has unsupported type {} ({})",
-                schema, table, name, vendorType, jdbcType);
-          }
-        }
-        // Get primary keys
-        try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
-          while (pks.next()) {
-            String colName = pks.getString(4);
-            cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.primaryKey = true);
-          }
+  private List<Column> retrieveColumns(DatabaseMetaData metadata, String catalog, String schema, String table,
+    List<String> columnExclusions) throws SQLException {
+    // Retrieve columns
+    List<Column> cols = new ArrayList<>();
+    try (ResultSet columns = metadata.getColumns(catalog, schema, table, "%")) {
+      while (columns.next()) {
+        String name = columns.getString(4);
+        int jdbcType = columns.getInt(5);
+        String vendorType = columns.getString(6);
+        boolean supported = isSupported(jdbcType);
+        boolean exclude = columnExclusions.stream()
+          .anyMatch(re -> (schema + "." + table + "." + name).matches("(?i:" + re + ")"));
+        cols.add(new Column(name, jdbcType, vendorType, supported, exclude));
+        if (!supported) {
+          LOGGER
+            .debug("[{}].[{}].[{}] has unsupported type {} ({})",
+              schema, table, name, vendorType, jdbcType);
         }
       }
-
-      return new Table(catalog, schema, table, cols);
-
-    }).toSingle();
-  }
-
-  @Override
-  public Observable<String> getTables(String catalog, String schema, List<String> priorities) {
-    return dbb.transactRx(db -> {
-
-      List<String> schemaTables = priorities.stream()
-        .filter(t -> t.startsWith(schema + "."))
-        .map(t -> t.split("\\.")[1])
-        .collect(Collectors.toList());
-
-      db.get().underlyingConnection().setCatalog(catalog);
-      db.get().underlyingConnection().setSchema(schema);
-      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
-      try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
-        List<String> tablesList = new ArrayList<>(schemaTables);
-        while (tables.next()) {
-          String tableName = tables.getString(3);
-          if (!tablesList.contains(tableName)) {
-            tablesList.add(tableName);
-          }
+      // Get primary keys
+      try (ResultSet pks = metadata.getPrimaryKeys(catalog, schema, table)) {
+        while (pks.next()) {
+          String colName = pks.getString(4);
+          cols.stream().filter(c -> c.name.equals(colName)).forEach(c -> c.primaryKey = true);
         }
-        return tablesList;
       }
-    }).toObservable().flatMapIterable(l -> l);
+    }
+    return cols;
   }
 
   /**
@@ -203,6 +173,73 @@ public class SqlServerDatabaseFns extends DatabaseFns {
               sql.append("FILE=1, REPLACE, STATS=1");
               return Single.just(sql.toString());
             });
+  }
+
+  @Override
+  public Observable<String> getTables(String catalog, String schema, List<String> tablesSplit, List<String> priorities) {
+    return dbb.transactRx(db -> {
+      List<String> schemaTables = new ArrayList<String>();
+
+      if(tablesSplit!=null)
+      {
+        schemaTables = tablesSplit.stream()
+        .filter(t -> t.startsWith(schema + "."))
+        .map(t -> t.split("\\.")[1])
+        .collect(Collectors.toList());
+      }     
+      schemaTables.addAll(priorities.stream()
+        .filter(t -> t.startsWith(schema + "."))
+        .map(t -> t.split("\\.")[1])
+        .collect(Collectors.toList()));
+
+      db.get().underlyingConnection().setSchema(schema);
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+      try (ResultSet tables = metadata.getTables(catalog, schema, null, new String[]{"TABLE"})) {
+        List<String> tablesList = new ArrayList<>(schemaTables);
+        while (tables.next()) {
+          String tableName = tables.getString(3);
+          if (!tablesList.contains(tableName)) {
+            tablesList.add(tableName);
+          }
+        }
+        return tablesList;
+      }
+    }).toObservable().flatMapIterable(l -> l);
+  }
+
+  @Override
+  public Observable<Query> getQueries(String catalog, String schema, String tableName, List<String> columnExclusions, 
+    Job job) {
+      return dbb.transactRx(db -> {
+      db.get().underlyingConnection().setSchema(schema);
+      DatabaseMetaData metadata = db.get().underlyingConnection().getMetaData();
+      List<Column> cols = retrieveColumns(metadata, catalog, schema, tableName, columnExclusions);
+      Table table = new Table(catalog, schema, tableName, cols);
+      String columns = getColumnSql(job, table);  
+        List<String> listQueries = new ArrayList<>();
+        String sql = String.format(Locale.ROOT, "SELECT %s FROM [%s].[%s] WITH (NOLOCK)", columns, schema, tableName);
+        listQueries.add(sql);   
+      return listQueries.stream().collect(Collectors.mapping(query -> new Query(catalog, schema, tableName, cols, query, "", "", ""), Collectors.toList()));
+
+    }).toObservable().flatMapIterable(l -> l);   
+  }
+
+  private String getColumnSql(Job job, Table table) {
+    return table.columns.stream()
+      .filter(Column::isExportable)
+      .map(col -> {
+        // Use column name string not JDBC type val to avoid sqlserver->jdbc mappings
+        if (job.stringDatetime && (col.vendorType.equals("datetime") || col.vendorType.equals("datetime2") || col.vendorType.equals("smalldatetime"))) {
+          return String.format(Locale.ROOT, "CONVERT(varchar, [%s], %d) AS [%s%s]",
+            col.name,
+            STRING_DATE_CONVERSION,
+            col.name,
+            job.stringDatetimeSuffix);
+        } else {
+          return "[" + col.name + "]";
+        }
+      })
+      .collect(Collectors.joining(", "));
   }
 
 }
