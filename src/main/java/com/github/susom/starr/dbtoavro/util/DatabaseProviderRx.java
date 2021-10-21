@@ -21,7 +21,6 @@ import com.github.susom.database.Config;
 import com.github.susom.database.Database;
 import com.github.susom.database.DatabaseException;
 import com.github.susom.database.DatabaseImpl;
-import com.github.susom.database.DatabaseProvider;
 import com.github.susom.database.DatabaseProvider.Pool;
 import com.github.susom.database.DbCode;
 import com.github.susom.database.DbCodeTx;
@@ -147,11 +146,10 @@ public class DatabaseProviderRx implements Supplier<Database> {
     } catch (Throwable t) {
       throw new DatabaseException("Error during transaction", t);
     } finally {
-      if (!complete) {
-        rollbackAndClose();
-      } else {
+      if (complete)
         commitAndClose();
-      }
+      else
+        rollbackAndClose();
     }
   }
 
@@ -171,11 +169,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
     } catch (Throwable t) {
       throw new DatabaseException("Error during transaction", t);
     } finally {
-      if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
-        rollbackAndClose();
-      } else {
+      if (complete)
         commitAndClose();
-      }
+      else if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly())
+        rollbackAndClose();      
+      else if (tx.isRollbackOnError())
+        rollback();
     }
   }
 
@@ -195,11 +194,10 @@ public class DatabaseProviderRx implements Supplier<Database> {
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
         } finally {
-          if (!complete) {
-            rollbackAndClose();
-          } else {
+          if (complete)
             commitAndClose();
-          }
+          else
+            rollbackAndClose();
         }
         emitter.onComplete();
       } catch (Throwable t) {
@@ -226,11 +224,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
         } finally {
-          if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
-            rollbackAndClose();
-          } else {
+          if (complete)
             commitAndClose();
-          }
+          else if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly())
+            rollbackAndClose();      
+          else if (tx.isRollbackOnError())
+            rollback();
         }
         emitter.onComplete();
       } catch (Throwable t) {
@@ -257,11 +256,10 @@ public class DatabaseProviderRx implements Supplier<Database> {
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
         } finally {
-          if (!complete) {
-            rollbackAndClose();
-          } else {
+          if (complete)
             commitAndClose();
-          }
+          else
+            rollbackAndClose();
         }
         if (returnValue != null) {
           emitter.onSuccess(returnValue);
@@ -293,11 +291,12 @@ public class DatabaseProviderRx implements Supplier<Database> {
         } catch (Throwable t) {
           throw new DatabaseException("Error during transaction", t);
         } finally {
-          if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly()) {
-            rollbackAndClose();
-          } else {
+          if (complete)
             commitAndClose();
-          }
+          else if ((!complete && tx.isRollbackOnError()) || tx.isRollbackOnly())
+            rollbackAndClose();
+          else if (tx.isRollbackOnError())
+            rollback();
         }
         if (returnValue != null) {
           emitter.onSuccess(returnValue);
@@ -469,6 +468,22 @@ public class DatabaseProviderRx implements Supplier<Database> {
         log.error("Unable to rollback the transaction", e);
       }
       close();
+    }
+  }
+
+  public void rollback() {
+    if (delegateTo != null) {
+      log.debug("Ignoring rollbackAndClose() because this is a fake provider");
+      return;
+    }
+    log.info("just rolling back, no close and do not set to null");
+
+    if (txStarted) {
+      try {
+        connection.rollback();
+      } catch (Exception e) {
+        log.error("Unable to rollback the transaction", e);
+      }
     }
   }
 

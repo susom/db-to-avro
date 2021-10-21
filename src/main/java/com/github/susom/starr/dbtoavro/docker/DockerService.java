@@ -19,7 +19,6 @@ package com.github.susom.starr.dbtoavro.docker;
 
 import com.github.dockerjava.api.model.Container;
 import io.reactivex.Observable;
-import java.io.File;
 import java.util.List;
 
 public interface DockerService {
