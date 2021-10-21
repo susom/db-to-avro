@@ -85,20 +85,21 @@ These do the same as the above, but instead of loading a database backup, it wil
 ----
 Option (* = required)    Description
 ---------------------    -----------
---backup-dir     directory containing backup to restore
---backup-files   comma-delimited list of backup files, or a single .par file
---catalog        catalog to export (Oracle N/A)
---connect        jdbc connection string for existing database
---destination    avro destination directory
---exclude        exclusions in form schema(.table)(.column)
-* --flavor       database type (sqlserver, oracle)
---password       database password (existing db)
---password-file  read database password from file (existing db)
---post-sql       path of sql file to execute after restore/connect
---pre-sql        path of sql file to execute before restore/connect
---schemas        only export this comma-delimited list of schemas
---tables         only export this comma-delimited list of tables
---user           database user (existing db)
+--backup-dir             directory containing backup to restore
+--backup-files           comma-delimited list of backup files, or a single .par file
+--catalog                catalog to export (Oracle N/A)
+--connect                jdbc connection string for existing database
+--destination            avro destination directory
+--exclude                exclusions in form schema(.table)(.column)
+* --flavor               database type (sqlserver, oracle)
+--password               database password (existing db)
+--password-file          read database password from file (existing db)
+--post-sql               path of sql file to execute after restore/connect
+--pre-sql                path of sql file to execute before restore/connect
+--schemas                only export this comma-delimited list of schemas
+--tables                 only export this comma-delimited list of tables
+--user                   database user (existing db)
+--split-table-strategy   flexible split table stratgies (only applicable for sqlserver)
 -h, --help               show help
 ----
 
@@ -184,5 +185,4 @@ from CoS boot creation)
 === Known Issues
 
 * Table and column names are normalized in db-goodies ETL, which is not reflected in job output log.
-* SQL server is single-threaded (per-table) and is much slower than Oracle (this may not be addressable)
 * Excluded tables are not explicitly noted in job output (they just aren't listed)

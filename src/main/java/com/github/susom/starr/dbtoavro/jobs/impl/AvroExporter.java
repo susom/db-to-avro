@@ -13,6 +13,8 @@ import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +36,8 @@ public class AvroExporter implements Exporter {
     int threads = config.getIntegerOrThrow("threads");
     ExecutorService writerPool = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
-
+    final int maxRetryCount = 4;
+    final int delay = 5;
     return loader.run(job)
       .flatMapObservable(database -> {
         AvroFns avroFns = FnFactory.getAvroFns(database.flavor, job, dbb);
@@ -45,7 +48,7 @@ public class AvroExporter implements Exporter {
               job.schemas.isEmpty()
                 || job.schemas.stream().anyMatch(x -> x.equals(schema)))
             .flatMap(schema ->
-              dbFns.getTables(job.catalog, schema, job.tablesSplit, job.tablePriorities)
+              dbFns.getTables(schema, job)
                 .filter(table ->
                   job.tables.isEmpty()
                     || job.tables.stream().anyMatch(x -> x.equals(schema + "." + table))
@@ -56,12 +59,22 @@ public class AvroExporter implements Exporter {
                     .noneMatch(re -> (schema + "." + table).matches("(?i:" + re + ")"))
                 )
                 .flatMap(tableName ->
-                  dbFns.getQueries(job.catalog, schema, tableName, job.columnExclusions, job)
+                  dbFns.getQueries(schema, tableName, job)
                   .flatMap(query -> avroFns.saveAsAvro(query)
-                  .subscribeOn(Schedulers.from(writerPool))
-                    .toObservable())
-                )
-              );
+                    .subscribeOn(Schedulers.from(writerPool))
+                    .toObservable()
+                    .retryWhen(errors -> //this retry is for saveAsAvro
+                      errors
+                            .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
+                            .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
+                      )
+                  )
+                  .retryWhen(errors -> //this retry is for getQueries
+                    errors
+                          .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
+                          .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
+                    )
+              ));
         }
       )
       .doOnComplete(writerPool::shutdown);

@@ -1,16 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
-  <parent>
-    <groupId>com.github.susom</groupId>
-    <artifactId>library-parent</artifactId>
-    <version>1.0.3</version>
-    <relativePath />
-  </parent>
-
+  <groupId>com.github.susom</groupId>
   <artifactId>db-to-avro</artifactId>
-  <version>1.8-SNAPSHOT</version>
+  <version>1.9-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Starr Core Database To Avro Utility</name>
@@ -50,6 +43,9 @@
     <version.jopt.simple>5.0.4</version.jopt.simple>
     <docker.version>3.1.2</docker.version>
     <main.class>com.github.susom.starr.dbtoavro.Main</main.class>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <exec.mainClass>com.github.susom.starr.dbtoavro.Main</exec.mainClass>
   </properties>
 
   <dependencyManagement>
@@ -70,6 +66,16 @@
   </dependencyManagement>
 
   <dependencies>
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>4.0.2</version>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle</groupId>
+      <artifactId>ojdbc8</artifactId>
+      <version>19.3</version>
+    </dependency>
     <dependency>
       <groupId>com.github.susom</groupId>
       <artifactId>database</artifactId>
@@ -111,9 +117,29 @@
       <version>4.12</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.25</version>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <version>9.2.1.jre8</version>
+    </dependency>
   </dependencies>
 
   <profiles>
+    <profile>
+      <id>oracle19</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.oracle</groupId>
+          <artifactId>ojdbc8</artifactId>
+          <version>19.3</version>
+        </dependency>
+      </dependencies>
+    </profile>
     <profile>
       <id>sqlserver</id>
       <dependencies>
@@ -121,7 +147,6 @@
           <groupId>com.microsoft.sqlserver</groupId>
           <artifactId>mssql-jdbc</artifactId>
           <version>9.2.1.jre8</version>
-          <scope>runtime</scope>
         </dependency>
       </dependencies>
     </profile>

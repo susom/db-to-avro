@@ -22,7 +22,7 @@ import com.github.susom.database.DatabaseException;
 import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
-import com.github.susom.starr.dbtoavro.entity.Table;
+import com.github.susom.starr.dbtoavro.entity.SplitTableStrategy;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
@@ -122,7 +122,7 @@ public abstract class DatabaseFns {
    * @param priorities these tables are dumped first
    * @return observable of catalogs
    */
-  public abstract Observable<String> getTables(String catalog, String schema, List<String> splitTables, List<String> priorities);
+  public abstract Observable<String> getTables(String schema, Job job);
 
   /**
    * Prepare queries for export for a given table
@@ -134,7 +134,7 @@ public abstract class DatabaseFns {
    * @param job job
    * @return observable of queries
    */
-  public abstract Observable<Query> getQueries(String catalog, String schema, String tableName, List<String> columnExclusions, Job job);
+  public abstract Observable<Query> getQueries(String schema, String tableName, Job job);
 
   /**
    * Introspects a database table, required for selecting the appropriate splitting and exporting method.

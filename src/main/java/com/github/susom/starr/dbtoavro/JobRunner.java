@@ -27,6 +27,7 @@ import com.github.susom.starr.dbtoavro.jobs.impl.OracleLoadDatabase;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadDatabase;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.starr.dbtoavro.entity.LocalDateTimeSerializer;
 import java.lang.reflect.Modifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -38,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
@@ -91,24 +93,30 @@ public class JobRunner {
     }
 
     if (job.destination != null) {
-      Gson gson = new GsonBuilder().excludeFieldsWithModifiers(Modifier.TRANSIENT).setPrettyPrinting().create();
+      Gson gson = new GsonBuilder().excludeFieldsWithModifiers(Modifier.TRANSIENT).setPrettyPrinting()
+      .registerTypeAdapter(LocalDateTime.class, new LocalDateTimeSerializer())
+      .create();
       //excludeFieldsWithoutExposeAnnotation().setPrettyPrinting().create();
       long startTime = System.nanoTime();
       return new AvroExporter(config, dbb).run(job, loader)
         .toList()
         .doOnSuccess(avro -> {
           job.avro = avro;
+          job.groupedAvro = avro.stream().filter(w -> w.tableName != null).collect(Collectors.groupingBy(w -> w.tableName));
           job.runtimeMs = (System.nanoTime() - startTime) / 1000000;
           Path output = Paths.get(job.logfile);
           Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8));
           LOGGER.info("Wrote {}", job.logfile);
           for (AvroFile avroFile : job.avro) {
-            if (avroFile.table.columns.stream().anyMatch(c -> !c.supported)) {
-              LOGGER.warn(String.format(Locale.ROOT, "Table %s had unsupported columns [%s]",
-                avroFile.table.name, avroFile.table.columns.stream()
-                  .filter(c -> !c.supported)
-                  .map(c -> c.name + " (" + c.vendorType + "," + c.jdbcType + ")")
-                  .collect(Collectors.joining(", "))));
+            if(avroFile.table != null)
+            {
+              if (avroFile.table.getColumns().stream().anyMatch(c -> !c.supported)) {
+                LOGGER.warn(String.format(Locale.ROOT, "Table %s had unsupported columns [%s]",
+                  avroFile.table.getName(), avroFile.table.getColumns().stream()
+                    .filter(c -> !c.supported)
+                    .map(c -> c.name + " (" + c.vendorType + "," + c.jdbcType + ")")
+                    .collect(Collectors.joining(", "))));
+              }
             }
           }
         })

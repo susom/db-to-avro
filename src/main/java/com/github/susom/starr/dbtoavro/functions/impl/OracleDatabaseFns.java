@@ -21,6 +21,7 @@ import com.github.susom.database.Config;
 import com.github.susom.starr.dbtoavro.entity.Column;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
+import com.github.susom.starr.dbtoavro.entity.Statistics;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx.Builder;
@@ -31,6 +32,7 @@ import io.reactivex.Single;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.sql.Connection;
 import java.sql.CallableStatement;
 import oracle.jdbc.OracleTypes;
@@ -130,7 +132,11 @@ public class OracleDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Observable<String> getTables(String catalog, String schema, List<String> tablesSplit, List<String> priorities) {
+  public Observable<String> getTables(String schema, Job job) {
+    String catalog = job.catalog;
+    List<String> tablesSplit = job.tablesSplit;
+    List<String> priorities = job.tablePriorities;
+
     return dbb.transactRx(db -> {
       List<String> schemaTables = new ArrayList<String>();
 
@@ -169,8 +175,13 @@ public class OracleDatabaseFns extends DatabaseFns {
   }
 
   @Override
-  public Observable<Query> getQueries(String catalog, String schema, String tableName, List<String> columnExclusions, Job job) {
-    return dbb.transactRx(db -> {
+  public Observable<Query> getQueries(String schema, String tableName, Job job) {
+    String catalog = job.catalog;
+    List<String> columnExclusions = job.columnExclusions;
+    
+    return dbb.transactRx((db, tx) -> {
+      tx.setRollbackOnError(false);
+      tx.setRollbackOnly(false);
       String conditionalQuery = null;
       String sqlReturn = null;
       List<String> listQueries = new ArrayList<>();
@@ -185,7 +196,7 @@ public class OracleDatabaseFns extends DatabaseFns {
       }
 
       Table table = new Table(catalog, schema, tableName, cols);
-      String columns = getColumnSql(job, table);
+      String columnSql = getColumnSql(job, table);
 
       if (job.tablesSplit.contains(schema + "." + tableName)) { //} || job.tablePriorities.contains(schema + "." + tableName)) {
         conditionalQuery = 
@@ -290,7 +301,7 @@ public class OracleDatabaseFns extends DatabaseFns {
         cs.close();
 
         List<String> updatedQueries = listQueries.stream()
-          .map(partialSql -> String.format(Locale.ROOT, "SELECT %s FROM \"%s\".\"%s\" %s", columns, schema, tableName, partialSql))
+          .map(partialSql -> String.format(Locale.ROOT, "SELECT %s FROM \"%s\".\"%s\" %s", columnSql, schema, tableName, partialSql))
           .collect(Collectors.toList());
 
         //updatedQueries.forEach(System.out::println);
@@ -303,18 +314,22 @@ public class OracleDatabaseFns extends DatabaseFns {
             String result = batch.stream().collect(Collectors.joining(" UNION \n"));        
             unionizeQueries.add(result);          
           });
+          int numberOfQueriesForTable = unionizeQueries.size();
           queries = unionizeQueries.stream().collect(Collectors.mapping(query -> 
             new Query(catalog, schema, tableName, cols, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
             , getId(query, startPattern).replace('/', '_').replace('+', '_')
-            , getId(query, endPattern).replace('/', '_').replace('+', '_')), Collectors.toList()));
+            , getId(query, endPattern).replace('/', '_').replace('+', '_'), numberOfQueriesForTable, table), Collectors.toList()));
         }
         else {
+          int numberOfQueriesForTable = updatedQueries.size();
           queries = updatedQueries.stream().collect(Collectors.mapping(query -> 
             new Query(catalog, schema, tableName, cols, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
             , getId(query, startPattern).replace('/', '_').replace('+', '_')
-            , getId(query, endPattern).replace('/', '_').replace('+', '_')), Collectors.toList()));
+            , getId(query, endPattern).replace('/', '_').replace('+', '_'), numberOfQueriesForTable, table), Collectors.toList()));
         }
         LOGGER.debug("Table {} Number of queries {}", tableName, index.get());
+        LOGGER.info("{}", new Statistics("Created", tableName, queries.size(), LocalDateTime.now(), table.getDbRowCount()));
+
       }
       catch(Exception e) {
         LOGGER.error("getQueries - tableName {}. Exception: {}", tableName, e);
@@ -327,7 +342,7 @@ public class OracleDatabaseFns extends DatabaseFns {
   }
 
   private String getColumnSql(Job job, Table table) {
-    return table.columns.stream()
+    return table.getColumns().stream()
       .filter(Column::isExportable)
       .map(c -> {
         // Use column name string (DATE) not java.sql.Type since JDBC is TIMESTAMP

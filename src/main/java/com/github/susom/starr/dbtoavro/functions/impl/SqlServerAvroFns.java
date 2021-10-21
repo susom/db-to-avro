@@ -2,36 +2,35 @@ package com.github.susom.starr.dbtoavro.functions.impl;
 
 import com.github.susom.dbgoodies.etl.Etl;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
-import com.github.susom.starr.dbtoavro.entity.Column;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
+import com.github.susom.starr.dbtoavro.entity.Statistics;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Single;
 import org.apache.avro.file.CodecFactory;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public class SqlServerAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerAvroFns.class);
-  private static int STRING_DATE_CONVERSION = 126;
 
   private final DatabaseProviderRx.Builder dbb;
   private final int fetchSize;
   private CodecFactory codec;
   private boolean tidyTables;
-  private boolean stringDate;
-  private String stringDateSuffix;
   private String filenamePattern;
   private String destination;
   private int avroSize;
@@ -41,59 +40,66 @@ public class SqlServerAvroFns implements AvroFns {
     this.fetchSize = job.fetchRows;
     this.codec = CodecFactory.fromString(job.codec);
     this.tidyTables = job.tidyTables;
-    this.stringDate = job.stringDatetime;
-    this.stringDateSuffix = job.stringDatetimeSuffix;
     this.avroSize = job.avroSize;
     this.filenamePattern = job.filenamePattern;
     this.destination = job.destination;
   }
 
   @Override
-  public Single<AvroFile> saveAsAvro(final Query sql) {
-    Table table = new Table(sql.getCatalog(), sql.getSchema(), sql.getName(), sql.getColumns());
+  public Single<AvroFile> saveAsAvro(final Query queryObject) {
     
-    if (sql.getColumns().stream().noneMatch(Column::isExportable)) {
-     LOGGER.warn("Skipping table {}, no columns are exportable", sql.getName());
-      return Single.just(new AvroFile(table, null, new ArrayList<>(), 0, 0, 0));
-    }
-    return dbb.transactRx(db -> {
-
+    return (dbb.transactRx((db, tx) -> {
+      tx.setRollbackOnError(false);
+      tx.setRollbackOnly(false);
+      Table table = queryObject.table;
       long startTime = System.nanoTime();
+      LocalDateTime startLocalTime = LocalDateTime.now();
 
       String path = filenamePattern
-      .replace("%{CATALOG}", sql.getCatalog() == null ? "catalog" : tidy(sql.getCatalog()))
-      .replace("%{SCHEMA}", sql.getSchema() == null ? "schema" : tidy(sql.getSchema()))
-      .replace("%{TABLE}", tidy(sql.getName()));
+        .replace("%{CATALOG}", queryObject.getCatalog() == null ? "catalog" : tidy(queryObject.getCatalog()))
+        .replace("%{SCHEMA}", queryObject.getSchema() == null ? "schema" : tidy(queryObject.getSchema()))
+        .replace("%{TABLE}", tidy(queryObject.getName()) + (StringUtils.isEmpty(queryObject.id) ? "" : "-" + queryObject.id));
 
-      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(sql.query))
-        .asAvro(Paths.get(destination, path).toString(), sql.getSchema(), sql.getName())
+      LOGGER.info("{}", new Statistics("Started", table.getName(), queryObject.numberOfQueriesForTable, queryObject.getId(), startLocalTime, 
+        table.getDbRowCount(), queryObject.getQuery()));
+      
+      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(queryObject.query))
+        .asAvro(Paths.get(destination, path).toString(), queryObject.getSchema(), queryObject.getName())
         .withCodec(codec)
         .fetchSize(fetchSize);
-
-      if (tidyTables) {
-        avro = avro.tidyNames();
-      }
-
-      List<String> files = new ArrayList<>();
-      long totalRows = 0;
-      long totalBytes = 0;
-      LOGGER.info("Writing {}", path);
-      if (avroSize > 0) {
-        Map<String, Long> output = avro.start(avroSize);
-        for (Map.Entry<String, Long> entry : output.entrySet()) {
-          files.add(entry.getKey());
-          totalRows += entry.getValue();
-          totalBytes += new File(entry.getKey()).length();
-        }
-      } else {
-        totalRows = avro.start();
-        files.add(path);
-      }
-
-        return new AvroFile(table, sql.query, files, (System.nanoTime() - startTime) / 1000000, totalBytes, totalRows);
-
-    }).toSingle();
+      return processSql(startLocalTime, startTime, path, avro, queryObject);
+    }).toSingle());
   }
+
+  private AvroFile processSql(LocalDateTime startLocalTime, long startTime, String path, Etl.SaveAsAvro avro, Query queryObject) {
+
+    String query = queryObject.getQuery();
+    String queryId = queryObject.getId();
+
+    List<String> files = new ArrayList<>();
+    long exportRowCount = 0;
+    long totalBytes = 0;
+    LOGGER.info("Writing {} for queryId {}, query is {}", path, queryId, query);
+    if (avroSize > 0) {
+      Map<String, Long> output = avro.start(avroSize);
+      for (Map.Entry<String, Long> entry : output.entrySet()) {
+        files.add(entry.getKey());
+        exportRowCount += entry.getValue();
+        totalBytes += new File(entry.getKey()).length();
+      }
+    } else {
+      exportRowCount = avro.start();
+      totalBytes = new File(path).length();
+      files.add(path);
+    }
+    long endTime = System.nanoTime();
+    LocalDateTime endLocalTime = LocalDateTime.now();
+    Table table = queryObject.table;
+    Statistics statistics = new Statistics("Completed", table.getName(), queryObject.numberOfQueriesForTable, queryId, files.size(), startLocalTime, endLocalTime,
+      Duration.between(startLocalTime, endLocalTime).getSeconds(), totalBytes, exportRowCount, table.getDbRowCount(), query);
+    LOGGER.info("{}", statistics);
+    return new AvroFile(queryObject, files, (endTime - startTime) / 1000000, totalBytes, exportRowCount, statistics);
+  } 
 
   private String tidy(final String name) {
     if (name != null && tidyTables) {

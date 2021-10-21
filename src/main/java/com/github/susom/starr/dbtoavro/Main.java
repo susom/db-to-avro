@@ -23,6 +23,7 @@ import static java.lang.System.exit;
 import com.github.susom.database.Config;
 import com.github.susom.database.ConfigFrom;
 import com.github.susom.database.Flavor;
+import com.github.susom.starr.dbtoavro.entity.SplitTableStrategy;
 import com.github.susom.starr.dbtoavro.entity.Job.Builder;
 import java.io.File;
 import java.io.IOException;
@@ -31,7 +32,9 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -202,6 +205,19 @@ public class Main {
       .withRequiredArg()
       .ofType(Boolean.class);
 
+    //multiple split-table-strategy can be specified. Each split-table-strategy applies to one table
+    //examples for non-numeric id table: split-table-strategy="IP_FLW_SHT_MEAS, fsd_id, like, 1, 10, 99" 
+    //examples for numeric id table: split-table-strategy="HNO_NOTE_TEXT, note_csn_id, between, 10000000, 1000000, 9999999999"
+    //examples for numeric id table with no optional values: split-table-strategy="HNO_NOTE_TEXT, note_csn_id, between, 10000000"
+    OptionSpec<String> splitTableStrategyOpt = parser.accepts("split-table-strategy", "specify split strategy for a table: \"table_name, column, operation, increment, start_range (optional), end_range (optional)\"")
+      .withRequiredArg()
+      .ofType(String.class);
+
+    OptionSpec<Integer> incrementFactorOpt = parser.accepts("increment-factor",
+      String.format(Locale.ROOT, "Increment factor (default %d)", 50))
+      .withRequiredArg()
+      .ofType(Integer.class);
+
     try {
 
       OptionSet optionSet = parser.parse(args);
@@ -312,6 +328,31 @@ public class Main {
       }
       finalConfiguration.value("database.password", databasePassword);
 
+      List<SplitTableStrategy> splitTableStrategy = new ArrayList<>();
+      try { 
+          if (optionSet.has(splitTableStrategyOpt)) {
+            List<String> splitTableStrategyOptList;
+            splitTableStrategyOptList = optionSet.valuesOf(splitTableStrategyOpt);
+            splitTableStrategyOptList.stream().forEach(x -> {
+
+              SplitTableStrategy ss = new SplitTableStrategy(x);
+              splitTableStrategy.add(ss);
+            });
+        }
+      }
+      catch(Exception ex)
+      {
+        LOGGER.info(ex.getMessage());
+        ex.printStackTrace();
+        exit(1);
+      }
+      splitTableStrategy.stream().forEach(x -> LOGGER.info("{}", x.toString()));
+
+      int incrementFactor = 50;
+      if (optionSet.has(incrementFactorOpt)) {
+        incrementFactor = optionSet.valueOf(incrementFactorOpt);
+      }
+
       int threads = config.getInteger("database.pool.size", Runtime.getRuntime().availableProcessors());
       if (optionSet.has(threadsOpt)) {
         threads = optionSet.valueOf(threadsOpt);
@@ -334,6 +375,8 @@ public class Main {
         .unionizeQuery(optionSet.valuesOf(unionizeQueryOpt))
         .tableExclusions(optionSet.valuesOf(tableExclusionsOpt))
         .columnExclusions(optionSet.valuesOf(columnExclusionsOpt))
+        .splitTableStrategies(splitTableStrategy)
+        .incrementFactor(incrementFactor)
         .backupDir(optionSet.valueOf(backupDirOpt))
         .backupFiles(optionSet.has(backupFilesOpt)
           ? optionSet.valuesOf(backupFilesOpt)

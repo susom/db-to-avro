@@ -20,6 +20,7 @@ package com.github.susom.starr.dbtoavro.entity;
 
 import com.github.susom.database.Flavor;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Simple pojo for storing an immutable job definition
@@ -51,9 +52,13 @@ public class Job {
   public final String codec;
   public final boolean tidyTables;
   public final boolean continueOnException;
+  public final List<SplitTableStrategy> splitTableStrategies;
+  public final int incrementFactor;
 
   public List<AvroFile> avro;
   public long runtimeMs;
+  public List<String> excludeTableFilter;
+  public Map<String, List<AvroFile>> groupedAvro;
 
   public Job(Builder builder) {
     this.id = builder.id;
@@ -81,6 +86,8 @@ public class Job {
     this.codec = builder.codec;
     this.tidyTables = builder.tidyTables;
     this.continueOnException = builder.continueOnException;
+    this.splitTableStrategies = builder.splitTableStrategies;
+    this.incrementFactor = builder.incrementFactor;
   }
 
   public static class Builder {
@@ -110,6 +117,8 @@ public class Job {
     private String codec;
     private boolean tidyTables;
     private boolean continueOnException;
+    private List<SplitTableStrategy> splitTableStrategies;
+    private int incrementFactor;
 
     public Builder() {
     }
@@ -240,6 +249,16 @@ public class Job {
 
     public Builder continueOnException(boolean continueOnException) {
       this.continueOnException = continueOnException;
+      return this;
+    }
+
+    public Builder splitTableStrategies(List<SplitTableStrategy> splitTableStrategies) {
+      this.splitTableStrategies = splitTableStrategies;
+      return this;
+    }
+
+    public Builder incrementFactor(int incrementFactor) {
+      this.incrementFactor = incrementFactor;
       return this;
     }
 
