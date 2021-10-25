@@ -7,28 +7,28 @@ import java.util.List;
  */
 public class Query {
 
+  public final transient Table table;
   public final String catalog;
   public final String schema;
   public final String name;
-  public final List<Column> columns;
+  public transient final List<Column> columns;
   public final String query;
   public final String id;
   public final String startRowid;
   public final String endRowid;
-  public final int numberOfQueriesForTable;
-  public final Table table;
+  public final int tableQueryCount;
 
-  public Query(String catalog, String schema, String name, List<Column> columns, String query, String id, String startRowid, String endRowid, int numberOfQueriesForTable, Table table) {
-    this.catalog = catalog;
-    this.schema = schema;
-    this.name = name;
-    this.columns = columns;
+  public Query(Table table, String query, String id, String startRowid, String endRowid) {
+    this.table = table;
+    this.catalog = table.getCatalog();
+    this.schema = table.getSchema();
+    this.name = table.getName();
+    this.columns = table.getColumns();
+    this.tableQueryCount = table.getQueryCount();
     this.query = query;
     this.id = id;
     this.startRowid = startRowid;
     this.endRowid = endRowid;
-    this.numberOfQueriesForTable = numberOfQueriesForTable;
-    this.table = table;
   }
 
   public String getQuery() {

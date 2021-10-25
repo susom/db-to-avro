@@ -6,21 +6,21 @@ import java.util.Locale;
 
 public class Statistics {
 
-  public String status;
-  public String table;
-  public int tableQueryCount;
-  public String queryId;
-  public int queryFileCount;
+  private String status;
+  private String table;
+  private int tableQueryCount;
+  private String queryId;
+  private int queryFileCount;
   private LocalDateTime startTime;
   private LocalDateTime endTime;
-  public long timeTakenInSeconds;
-  public long totalBytes;
-  public long exportRowCount;
-  public Long tableRowCount;
-  public String query;
+  private long timeTakenInSeconds;
+  private long totalBytes;
+  private long exportRowCount;
+  private Long dbRowCount;
+  private String query;
 
   public Statistics(String status, String table, int tableQueryCount, String queryId, int queryFileCount, LocalDateTime startTime, LocalDateTime endTime,
-    long timeTakenInSeconds, long totalBytes, long exportRowCount, Long tableRowCount, String query) {
+    long timeTakenInSeconds, long totalBytes, long exportRowCount, Long dbRowCount, String query) {
     this.status = status;
     this.table = table;
     this.tableQueryCount = tableQueryCount;
@@ -31,26 +31,26 @@ public class Statistics {
     this.timeTakenInSeconds = timeTakenInSeconds;
     this.totalBytes = totalBytes;
     this.exportRowCount = exportRowCount;
-    this.tableRowCount = tableRowCount;
+    this.dbRowCount = dbRowCount;
     this.query = query;
   }
 
-  public Statistics(String status, String table, int tableQueryCount, String queryId, LocalDateTime startTime, Long tableRowCount, String query) {
+  public Statistics(String status, String table, int tableQueryCount, String queryId, LocalDateTime startTime, Long dbRowCount, String query) {
     this.status = status;
     this.table = table;
     this.tableQueryCount = tableQueryCount;
     this.queryId = queryId;
     this.startTime = startTime;
-    this.tableRowCount = tableRowCount;
+    this.dbRowCount = dbRowCount;
     this.query = query;
   }
 
-  public Statistics(String status, String table, int tableQueryCount, LocalDateTime startTime, Long tableRowCount) {
+  public Statistics(String status, String table, int tableQueryCount, LocalDateTime startTime, Long dbRowCount) {
     this.status = status;
     this.table = table;
     this.tableQueryCount = tableQueryCount;
     this.startTime = startTime;
-    this.tableRowCount = tableRowCount;
+    this.dbRowCount = dbRowCount;
   }
 
   @Override
@@ -59,7 +59,7 @@ public class Statistics {
       status, table, tableQueryCount, queryId, queryFileCount, 
       startTime != null ? startTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "", 
       endTime != null ? endTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "",
-      timeTakenInSeconds, totalBytes, exportRowCount, tableRowCount, query);
+      timeTakenInSeconds, totalBytes, exportRowCount, dbRowCount, query);
   }
 
 }

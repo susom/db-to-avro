@@ -351,8 +351,8 @@ public class SqlServerDatabaseFns extends DatabaseFns {
         LOGGER.info("{}", new Statistics("Created", tableName, listQueries.size(), LocalDateTime.now(), table.getDbRowCount()));
 
         AtomicInteger index = new AtomicInteger(0);
-        int numberOfQueriesForTable = listQueries.size();
-        return listQueries.stream().collect(Collectors.mapping(query -> new Query(catalog, schema, tableName, cols, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0"), "", "", numberOfQueriesForTable, table), Collectors.toList()));
+        table.setQueryCount(listQueries.size());
+        return listQueries.stream().collect(Collectors.mapping(query -> new Query(table, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0"), "", ""), Collectors.toList()));
       }).toObservable().flatMapIterable(l -> l);
   }
 

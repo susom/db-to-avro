@@ -13,6 +13,7 @@ public class Table {
   private String name;
   private transient List<Column> columns;
   private long dbRowCount;
+  private int queryCount;
   private List<SplitTableStrategy> splitStrategies;
 
   public Table(String catalog, String schema, String name, List<Column> columns) {
@@ -77,6 +78,14 @@ public class Table {
 
   public void setSplitStrategies(List<SplitTableStrategy> splitStrategies) {
     this.splitStrategies = splitStrategies;
+  }
+
+  public int getQueryCount() {
+    return queryCount;
+  }
+
+  public void setQueryCount(int queryCount) {
+    this.queryCount = queryCount;
   }
 
 }

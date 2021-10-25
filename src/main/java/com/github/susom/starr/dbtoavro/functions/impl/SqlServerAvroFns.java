@@ -60,7 +60,7 @@ public class SqlServerAvroFns implements AvroFns {
         .replace("%{SCHEMA}", queryObject.getSchema() == null ? "schema" : tidy(queryObject.getSchema()))
         .replace("%{TABLE}", tidy(queryObject.getName()) + (StringUtils.isEmpty(queryObject.id) ? "" : "-" + queryObject.id));
 
-      LOGGER.info("{}", new Statistics("Started", table.getName(), queryObject.numberOfQueriesForTable, queryObject.getId(), startLocalTime, 
+      LOGGER.info("{}", new Statistics("Started", table.getName(), queryObject.tableQueryCount, queryObject.getId(), startLocalTime, 
         table.getDbRowCount(), queryObject.getQuery()));
       
       Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(queryObject.query))
@@ -95,7 +95,7 @@ public class SqlServerAvroFns implements AvroFns {
     long endTime = System.nanoTime();
     LocalDateTime endLocalTime = LocalDateTime.now();
     Table table = queryObject.table;
-    Statistics statistics = new Statistics("Completed", table.getName(), queryObject.numberOfQueriesForTable, queryId, files.size(), startLocalTime, endLocalTime,
+    Statistics statistics = new Statistics("Completed", table.getName(), queryObject.tableQueryCount, queryId, files.size(), startLocalTime, endLocalTime,
       Duration.between(startLocalTime, endLocalTime).getSeconds(), totalBytes, exportRowCount, table.getDbRowCount(), query);
     LOGGER.info("{}", statistics);
     return new AvroFile(queryObject, files, (endTime - startTime) / 1000000, totalBytes, exportRowCount, statistics);
