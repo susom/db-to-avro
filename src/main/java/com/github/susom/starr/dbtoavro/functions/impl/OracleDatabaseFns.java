@@ -314,18 +314,18 @@ public class OracleDatabaseFns extends DatabaseFns {
             String result = batch.stream().collect(Collectors.joining(" UNION \n"));        
             unionizeQueries.add(result);          
           });
-          int numberOfQueriesForTable = unionizeQueries.size();
+          table.setQueryCount(unionizeQueries.size());
           queries = unionizeQueries.stream().collect(Collectors.mapping(query -> 
-            new Query(catalog, schema, tableName, cols, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
+            new Query(table, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
             , getId(query, startPattern).replace('/', '_').replace('+', '_')
-            , getId(query, endPattern).replace('/', '_').replace('+', '_'), numberOfQueriesForTable, table), Collectors.toList()));
+            , getId(query, endPattern).replace('/', '_').replace('+', '_')), Collectors.toList()));
         }
         else {
-          int numberOfQueriesForTable = updatedQueries.size();
+          table.setQueryCount(updatedQueries.size());
           queries = updatedQueries.stream().collect(Collectors.mapping(query -> 
-            new Query(catalog, schema, tableName, cols, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
+            new Query(table, query, StringUtils.leftPad(String.valueOf(index.incrementAndGet()), 7, "0")
             , getId(query, startPattern).replace('/', '_').replace('+', '_')
-            , getId(query, endPattern).replace('/', '_').replace('+', '_'), numberOfQueriesForTable, table), Collectors.toList()));
+            , getId(query, endPattern).replace('/', '_').replace('+', '_')), Collectors.toList()));
         }
         LOGGER.debug("Table {} Number of queries {}", tableName, index.get());
         LOGGER.info("{}", new Statistics("Created", tableName, queries.size(), LocalDateTime.now(), table.getDbRowCount()));

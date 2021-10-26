@@ -6,8 +6,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.StringTokenizer;
 
@@ -15,8 +13,6 @@ import java.util.StringTokenizer;
  * Split Table Option/strategy for a given table to be split
  */
 public class SplitTableStrategy {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(SplitTableStrategy.class);
 
   private String tableName;
   private String column;
