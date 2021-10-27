@@ -100,8 +100,7 @@ public class JobRunner {
       return new AvroExporter(config, dbb).run(job, loader)
         .toList()
         .doOnSuccess(avro -> {
-          job.avro = avro;
-          //job.groupedAvro = avro.stream().filter(w -> w.tableName != null).collect(Collectors.groupingBy(w -> w.tableName));
+          job.setOutputFromAvro(avro);
           job.runtimeMs = (System.nanoTime() - startTime) / 1000000;
           Path output = Paths.get(job.logfile);
           Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8));

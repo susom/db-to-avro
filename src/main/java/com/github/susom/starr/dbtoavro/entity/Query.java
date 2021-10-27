@@ -8,14 +8,14 @@ import java.util.List;
 public class Query {
 
   public final transient Table table;
-  public final String catalog;
-  public final String schema;
-  public final String name;
-  public transient final List<Column> columns;
+  private final String catalog;
+  private final String schema;
+  private final String name;
+  private transient final List<Column> columns;
   public final String query;
   public final String id;
-  public final String startRowid;
-  public final String endRowid;
+  private final String startRowid;
+  private final String endRowid;
   public final int tableQueryCount;
 
   public Query(Table table, String query, String id, String startRowid, String endRowid) {
