@@ -11,7 +11,7 @@ public class AvroFile {
   public transient Query queryObject;
   public String tableName;
   public String query;
-  public List<String> files;
+  public transient List<String> files;
   public long exportTimeMs;
   public long totalBytes;
   public long exportRowCount;
@@ -28,6 +28,7 @@ public class AvroFile {
     this.exportRowCount = exportRowCount;
     this.queryId = queryObject.id;
     this.statistics = statistics;
+    this.statistics.setFiles(files);
   }
 
   public Query getQueryObject() {
