@@ -6,7 +6,7 @@ import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.impl.OracleDatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.impl.OracleDockerFns;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import com.github.susom.starr.dbtoavro.util.RepeatWithDelay;
 import io.reactivex.Completable;
 import io.reactivex.Single;
@@ -26,7 +26,7 @@ public class OracleLoadDataPump implements Loader {
   private Config config;
   private String containerId;
 
-  public OracleLoadDataPump(Config config, DatabaseProviderRx.Builder dbb) {
+  public OracleLoadDataPump(Config config, DatabaseProvider.Builder dbb) {
     this.config = config;
     this.db = new OracleDatabaseFns(config, dbb);
   }

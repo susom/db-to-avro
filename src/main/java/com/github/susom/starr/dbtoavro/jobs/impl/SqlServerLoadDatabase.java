@@ -22,7 +22,7 @@ import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import io.reactivex.Completable;
 import io.reactivex.Single;
 import org.slf4j.Logger;
@@ -37,7 +37,7 @@ public class SqlServerLoadDatabase implements Loader {
 
   private SqlServerDatabaseFns db;
 
-  public SqlServerLoadDatabase(Config config, DatabaseProviderRx.Builder dbb) {
+  public SqlServerLoadDatabase(Config config, DatabaseProvider.Builder dbb) {
     this.db = new SqlServerDatabaseFns(config, dbb);
   }
 

@@ -23,7 +23,7 @@ import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.SplitTableStrategy;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
 import io.reactivex.Single;
@@ -36,11 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class DatabaseFns {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseFns.class);
-
-  protected final Config config;
-  protected final DatabaseProviderRx.Builder dbb;
 
   protected static final int[] supportedTypes = {
     Types.BIGINT,
@@ -68,8 +63,11 @@ public abstract class DatabaseFns {
     Types.VARBINARY,
     Types.VARCHAR
   };
+  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseFns.class);
+  protected final Config config;
+  protected final DatabaseProvider.Builder dbb;
 
-  public DatabaseFns(Config config, DatabaseProviderRx.Builder dbb) {
+  public DatabaseFns(Config config, DatabaseProvider.Builder dbb) {
     this.config = config;
     this.dbb = dbb;
   }
@@ -81,11 +79,14 @@ public abstract class DatabaseFns {
    * @return database object
    */
   public Single<Database> getDatabase(String containerId) {
-    return dbb.transactRx(db -> {
-      Database database = new Database(containerId);
-      database.flavor = db.get().flavor();
-      return database;
-    }).toSingle();
+    return Single.fromCallable(
+        () ->
+            dbb.transactReturning(
+                db -> {
+                  Database database = new Database(containerId);
+                  database.flavor = db.get().flavor();
+                  return database;
+                }));
   }
 
   /**
@@ -94,15 +95,18 @@ public abstract class DatabaseFns {
    * @return Single boolean indicating if database connection was successful
    */
   public Single<Boolean> isValid() {
-    return dbb.transactRx(db -> {
-      LOGGER.debug("Attempting to connect to database...");
-      try {
-        return db.get().underlyingConnection().isValid(30000);
-      } catch (DatabaseException ex) {
-        LOGGER.error("Failed to connect: ", ex);
-        return false;
-      }
-    }).toSingle();
+    return Single.fromCallable(
+        () ->
+            dbb.transactReturning(
+                db -> {
+                  LOGGER.debug("Attempting to connect to database...");
+                  try {
+                    return db.get().underlyingConnection().isValid(30000);
+                  } catch (DatabaseException ex) {
+                    LOGGER.error("Failed to connect: ", ex);
+                    return false;
+                  }
+                }));
   }
 
   /**
@@ -137,7 +141,8 @@ public abstract class DatabaseFns {
   public abstract Observable<Query> getQueries(String schema, String tableName, Job job);
 
   /**
-   * Introspects a database table, required for selecting the appropriate splitting and exporting method.
+   * Introspects a database table, required for selecting the appropriate splitting and exporting
+   * method.
    *
    * @param catalog catalog to query
    * @param schema schema to query
@@ -145,7 +150,8 @@ public abstract class DatabaseFns {
    * @param columnExclusions excludes any regexes that match against schema.table.column
    * @return Single of table with row counts, byte sizes, and supported column information
    */
-  //public abstract Single<Query> introspect(String catalog, String schema, String table, List<String> columnExclusions, String query);
+  // public abstract Single<Query> introspect(String catalog, String schema, String table,
+  // List<String> columnExclusions, String query);
 
   public abstract Single<String> getRestoreSql(String catalog, List<String> backupFiles);
 
@@ -159,14 +165,17 @@ public abstract class DatabaseFns {
     if (file == null) {
       return Completable.complete();
     }
-    return dbb.transactRx(db -> {
-      Scanner scanner = new Scanner(file, "UTF-8").useDelimiter(";");
-      while (scanner.hasNext()) {
-        String statement = scanner.next() + ";";
-        LOGGER.debug("Pre-SQL: {}", statement);
-        db.get().ddl(statement).execute();
-      }
-    });
+    return Completable.fromRunnable(
+        () ->
+            dbb.transact(
+                db -> {
+                  Scanner scanner = new Scanner(file, "UTF-8").useDelimiter(";");
+                  while (scanner.hasNext()) {
+                    String statement = scanner.next() + ";";
+                    LOGGER.debug("Pre-SQL: {}", statement);
+                    db.get().ddl(statement).execute();
+                  }
+                }));
   }
 
   /**
@@ -175,16 +184,16 @@ public abstract class DatabaseFns {
    * @return completable status
    */
   public Completable transact(String sql) {
-    if (sql == null) {
-      return Completable.complete();
-    }
-    return dbb.transactRx(db -> {
-      db.get().ddl(sql).execute();
-    });
+    return Completable.fromRunnable(
+        () -> {
+          if (sql == null) {
+            return;
+          }
+          dbb.transact(db -> db.get().ddl(sql).execute());
+        });
   }
 
   protected boolean isSupported(int jdbcType) {
     return IntStream.of(supportedTypes).anyMatch(x -> x == jdbcType);
   }
-
 }

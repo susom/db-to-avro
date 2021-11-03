@@ -7,7 +7,7 @@ import com.github.susom.starr.dbtoavro.entity.Query;
 import com.github.susom.starr.dbtoavro.entity.Statistics;
 import com.github.susom.starr.dbtoavro.entity.Table;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import io.reactivex.Single;
 import org.apache.avro.file.CodecFactory;
 import org.apache.commons.lang.StringUtils;
@@ -27,7 +27,7 @@ public class OracleAvroFns implements AvroFns {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(OracleAvroFns.class);
 
-  private final DatabaseProviderRx.Builder dbb;
+  private final DatabaseProvider.Builder dbb;
   private final int fetchSize;
   private CodecFactory codec;
   private boolean tidyTables;
@@ -35,7 +35,7 @@ public class OracleAvroFns implements AvroFns {
   private String destination;
   private int avroSize;
 
-  public OracleAvroFns(Job job, DatabaseProviderRx.Builder dbb) {
+  public OracleAvroFns(Job job, DatabaseProvider.Builder dbb) {
     this.dbb = dbb;
     this.fetchSize = job.fetchRows;
     this.codec = CodecFactory.fromString(job.codec);
@@ -47,33 +47,64 @@ public class OracleAvroFns implements AvroFns {
 
   @Override
   public Single<AvroFile> saveAsAvro(final Query queryObject) {
-    
-    return (dbb.transactRx((db, tx) -> {
-      tx.setRollbackOnError(false);
-      tx.setRollbackOnly(false);
-      Table table = queryObject.table;
-      long startTime = System.nanoTime();
-      LocalDateTime startLocalTime = LocalDateTime.now();
+    return Single.fromCallable(
+        () ->
+            dbb.transactReturning(
+                db -> {
+                  Table table = queryObject.table;
+                  long startTime = System.nanoTime();
+                  LocalDateTime startLocalTime = LocalDateTime.now();
 
-      String path = filenamePattern
-        .replace("%{CATALOG}", queryObject.getCatalog() == null ? "catalog" : tidy(queryObject.getCatalog()))
-        .replace("%{SCHEMA}", queryObject.getSchema() == null ? "schema" : tidy(queryObject.getSchema()))
-        .replace("%{TABLE}", tidy(queryObject.getName()) + (StringUtils.isEmpty(queryObject.id) ? "" : "-" + queryObject.id));
+                  String path =
+                      filenamePattern
+                          .replace(
+                              "%{CATALOG}",
+                              queryObject.getCatalog() == null
+                                  ? "catalog"
+                                  : tidy(queryObject.getCatalog()))
+                          .replace(
+                              "%{SCHEMA}",
+                              queryObject.getSchema() == null
+                                  ? "schema"
+                                  : tidy(queryObject.getSchema()))
+                          .replace(
+                              "%{TABLE}",
+                              tidy(queryObject.getName())
+                                  + (StringUtils.isEmpty(queryObject.id)
+                                      ? ""
+                                      : "-" + queryObject.id));
 
-      String query = queryObject.query;
-      //query = dummy_error_and_test(table, query, queryObject, startLocalTime);
-      LOGGER.info("{}", new Statistics("Started", table.getName(), queryObject.tableQueryCount, queryObject.getId(), startLocalTime, 
-        table.getDbRowCount(), queryObject.getQuery()));
-      
-      Etl.SaveAsAvro avro = Etl.saveQuery(db.get().toSelect(query))
-        .asAvro(Paths.get(destination, path).toString(), queryObject.getSchema(), queryObject.getName())
-        .withCodec(codec)
-        .fetchSize(fetchSize);
-      return processSql(startLocalTime, startTime, path, avro, queryObject);
-    }).toSingle());
+                  String query = queryObject.query;
+                  // query = dummy_error_and_test(table, query, queryObject, startLocalTime);
+                  LOGGER.info(
+                      "{}",
+                      new Statistics(
+                          "Started",
+                          table.getName(),
+                          queryObject.tableQueryCount,
+                          queryObject.getId(),
+                          startLocalTime,
+                          table.getDbRowCount(),
+                          queryObject.getQuery()));
+
+                  Etl.SaveAsAvro avro =
+                      Etl.saveQuery(db.get().toSelect(query))
+                          .asAvro(
+                              Paths.get(destination, path).toString(),
+                              queryObject.getSchema(),
+                              queryObject.getName())
+                          .withCodec(codec)
+                          .fetchSize(fetchSize);
+                  return processSql(startLocalTime, startTime, path, avro, queryObject);
+                }));
   }
 
-  private AvroFile processSql(LocalDateTime startLocalTime, long startTime, String path, Etl.SaveAsAvro avro, Query queryObject) {
+  private AvroFile processSql(
+      LocalDateTime startLocalTime,
+      long startTime,
+      String path,
+      Etl.SaveAsAvro avro,
+      Query queryObject) {
 
     String query = queryObject.getQuery();
     String queryId = queryObject.getId();
@@ -97,22 +128,38 @@ public class OracleAvroFns implements AvroFns {
     long endTime = System.nanoTime();
     LocalDateTime endLocalTime = LocalDateTime.now();
     Table table = queryObject.table;
-    Statistics statistics = new Statistics("Completed", table.getName(), queryObject.tableQueryCount, queryId, files.size(), startLocalTime, endLocalTime,
-      Duration.between(startLocalTime, endLocalTime).getSeconds(), totalBytes, exportRowCount, table.getDbRowCount(), query);
+    Statistics statistics =
+        new Statistics(
+            "Completed",
+            table.getName(),
+            queryObject.tableQueryCount,
+            queryId,
+            files.size(),
+            startLocalTime,
+            endLocalTime,
+            Duration.between(startLocalTime, endLocalTime).getSeconds(),
+            totalBytes,
+            exportRowCount,
+            table.getDbRowCount(),
+            query);
     LOGGER.info("{}", statistics);
-    return new AvroFile(queryObject, files, (endTime - startTime) / 1000000, totalBytes, exportRowCount, statistics);
-  } 
+    return new AvroFile(
+        queryObject,
+        files,
+        (endTime - startTime) / 1000000,
+        totalBytes,
+        exportRowCount,
+        statistics);
+  }
 
   private String tidy(final String name) {
     if (name != null && tidyTables) {
-      return name
-        .replaceAll("[^a-zA-Z0-9]", " ")
-        .replaceAll("\\s", "_")
-        .trim()
-        .toLowerCase(Locale.ROOT);
+      return name.replaceAll("[^a-zA-Z0-9]", " ")
+          .replaceAll("\\s", "_")
+          .trim()
+          .toLowerCase(Locale.ROOT);
     } else {
       return name;
     }
   }
-
 }

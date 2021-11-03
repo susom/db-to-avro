@@ -8,7 +8,7 @@ import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobs.Exporter;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
 import java.util.concurrent.ExecutorService;
@@ -23,9 +23,9 @@ public class AvroExporter implements Exporter {
   private static final Logger LOGGER = LoggerFactory.getLogger(AvroExporter.class);
 
   private final Config config;
-  private DatabaseProviderRx.Builder dbb;
+  private DatabaseProvider.Builder dbb;
 
-  public AvroExporter(Config config, DatabaseProviderRx.Builder dbb) {
+  public AvroExporter(Config config, DatabaseProvider.Builder dbb) {
     this.config = config;
     this.dbb = dbb;
   }

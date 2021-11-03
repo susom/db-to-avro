@@ -18,6 +18,7 @@
 package com.github.susom.starr.dbtoavro;
 
 import com.github.susom.database.Config;
+import com.github.susom.database.DatabaseProvider;
 import com.github.susom.starr.dbtoavro.entity.AvroFile;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
@@ -26,7 +27,6 @@ import com.github.susom.starr.dbtoavro.jobs.impl.AvroExporter;
 import com.github.susom.starr.dbtoavro.jobs.impl.OracleLoadDatabase;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadBackup;
 import com.github.susom.starr.dbtoavro.jobs.impl.SqlServerLoadDatabase;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import com.github.susom.starr.dbtoavro.entity.LocalDateTimeSerializer;
 import java.lang.reflect.Modifier;
 import com.google.gson.Gson;
@@ -52,12 +52,12 @@ public class JobRunner {
 
   private final Job job;
   private final Config config;
-  private final DatabaseProviderRx.Builder dbb;
+  private final DatabaseProvider.Builder dbb;
 
   public JobRunner(Config config, Job job) {
     this.config = config;
     this.job = job;
-    this.dbb = DatabaseProviderRx
+    this.dbb = DatabaseProvider
       .pooledBuilder(config)
       .withSqlInExceptionMessages()
       .withConnectionAccess()
