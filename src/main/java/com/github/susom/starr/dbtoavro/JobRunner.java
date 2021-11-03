@@ -101,6 +101,7 @@ public class JobRunner {
         .toList()
         .doOnSuccess(avro -> {
           job.setOutputFromAvro(avro);
+          //job.failedAvro = avro.stream().filter(w -> !w.success).collect(Collectors.toList());//.forEach(LOGGER::info);;
           job.runtimeMs = (System.nanoTime() - startTime) / 1000000;
           Path output = Paths.get(job.logfile);
           Files.write(output, gson.toJson(job).getBytes(StandardCharsets.UTF_8));

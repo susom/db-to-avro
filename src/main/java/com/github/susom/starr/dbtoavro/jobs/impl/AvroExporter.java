@@ -63,16 +63,17 @@ public class AvroExporter implements Exporter {
                   .flatMap(query -> avroFns.saveAsAvro(query)
                     .subscribeOn(Schedulers.from(writerPool))
                     .toObservable()
+                    //.onErrorReturnItem(new AvroFile(query, false))
                     .retryWhen(errors -> //this retry is for saveAsAvro
                       errors
                             .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
-                            .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
+                            .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)) )
                       )
                   )
                   .retryWhen(errors -> //this retry is for getQueries
                     errors
                           .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
-                          .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
+                          .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)))
                     )
               ));
         }
