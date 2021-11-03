@@ -62,6 +62,7 @@ public class Job {
   public transient List<AvroFile> avro;
   public long runtimeMs;
   public List<Output> outputList;
+  public List<AvroFile> failedAvro;
 
   public Job(Builder builder) {
     this.id = builder.id;

@@ -48,7 +48,7 @@ public class SqlServerAvroFns implements AvroFns {
   @Override
   public Single<AvroFile> saveAsAvro(final Query queryObject) {
     
-    return (dbb.transactRx((db, tx) -> {
+    return (Single.defer( () -> dbb.transactRx((db, tx) -> {
       tx.setRollbackOnError(false);
       tx.setRollbackOnly(false);
       Table table = queryObject.table;
@@ -68,7 +68,7 @@ public class SqlServerAvroFns implements AvroFns {
         .withCodec(codec)
         .fetchSize(fetchSize);
       return processSql(startLocalTime, startTime, path, avro, queryObject);
-    }).toSingle());
+    }).toSingle()));
   }
 
   private AvroFile processSql(LocalDateTime startLocalTime, long startTime, String path, Etl.SaveAsAvro avro, Query queryObject) {

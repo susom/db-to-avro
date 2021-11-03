@@ -287,8 +287,10 @@ public class DatabaseProviderRx implements Supplier<Database> {
           returnValue = code.run(this, tx);
           complete = true;
         } catch (ThreadDeath | DatabaseException t) {
+          log.error("(ThreadDeath) (DatabaseException) <T> Maybe<T> transactRx(final DbCodeTypedTx<T> code) %%%%%%%%%%%%%%%%%%%%%%%%% Exception {} isRollbackOnError={} isRollbackOnly={}",  t.getMessage(), tx.isRollbackOnError(), tx.isRollbackOnly());
           throw t;
         } catch (Throwable t) {
+          log.error("(Throwable) <T> Maybe<T> transactRx(final DbCodeTypedTx<T> code) %%%%%%%%%%%%%%%%%%%%%%%%% Exception {} isRollbackOnError={} isRollbackOnly={}",  t.getMessage(), tx.isRollbackOnError(), tx.isRollbackOnly());
           throw new DatabaseException("Error during transaction", t);
         } finally {
           if (complete)
@@ -297,6 +299,8 @@ public class DatabaseProviderRx implements Supplier<Database> {
             rollbackAndClose();
           else if (tx.isRollbackOnError())
             rollback();
+          else
+            close();
         }
         if (returnValue != null) {
           emitter.onSuccess(returnValue);
@@ -304,6 +308,7 @@ public class DatabaseProviderRx implements Supplier<Database> {
           emitter.onComplete();
         }
       } catch (Throwable t) {
+        log.error("(outside-Throwable) <T> Maybe<T> transactRx(final DbCodeTypedTx<T> code) %%%%%%%%%%%%%%%%%%%%%%%%% Exception {}", t.getMessage());
         emitter.onError(t);
       }
     });
