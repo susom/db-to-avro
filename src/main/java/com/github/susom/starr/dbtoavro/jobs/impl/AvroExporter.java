@@ -35,6 +35,7 @@ public class AvroExporter implements Exporter {
 
     int threads = config.getIntegerOrThrow("threads");
     ExecutorService writerPool = Executors.newFixedThreadPool(threads);
+    ExecutorService metadataPool = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
     final int maxRetryCount = 4;
     final int delay = 5;
@@ -44,7 +45,7 @@ public class AvroExporter implements Exporter {
         DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
         return
           dbFns.getSchemas(job.catalog)
-            .filter(schema ->
+              .filter(schema ->
               job.schemas.isEmpty()
                 || job.schemas.stream().anyMatch(x -> x.equals(schema)))
             .flatMap(schema ->
@@ -69,13 +70,15 @@ public class AvroExporter implements Exporter {
                             .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
                             .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)) )
                       )
-                  )
+                  ,false, threads) // don't create more writer observables than #threads
+                  .subscribeOn(Schedulers.from(metadataPool))
                   .retryWhen(errors -> //this retry is for getQueries
                     errors
                           .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
                           .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)))
-                    )
-              ));
+                   )
+                ,false, threads) // only look ahead by #threads tables
+            );
         }
       )
       .doOnComplete(writerPool::shutdown);

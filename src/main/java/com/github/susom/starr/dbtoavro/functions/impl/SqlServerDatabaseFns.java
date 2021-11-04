@@ -288,6 +288,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
   public Observable<Query> getQueries(String schema, String tableName, Job job) {
     return Observable.fromCallable(
             () -> {
+//              LOGGER.warn(">>>>>>>>>>>>>> STARTING GET QUERIES <<<<<<<<<");
               String catalog = job.catalog;
               List<String> columnExclusions = job.columnExclusions;
               long incrementFactor = job.incrementFactor;
@@ -500,6 +501,7 @@ public class SqlServerDatabaseFns extends DatabaseFns {
 
                     AtomicInteger index = new AtomicInteger(0);
                     table.setQueryCount(listQueries.size());
+//                    LOGGER.warn(">>>>>>>>>>>>> GOT ALL QUERIES <<<<<<<<<<<<<");
                     return listQueries.stream()
                         .map(
                             query ->
