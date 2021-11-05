@@ -70,18 +70,19 @@ public class AvroExporter implements Exporter {
                             .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
                             .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)) )
                       )
-                  ,false, threads) // don't create more writer observables than #threads
+                  )
                   .subscribeOn(Schedulers.from(metadataPool))
                   .retryWhen(errors -> //this retry is for getQueries
                     errors
                           .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
                           .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)))
                    )
-                ,false, threads) // only look ahead by #threads tables
+                ,false, threads * 2) // don't make too many outstanding observables
             );
         }
       )
-      .doOnComplete(writerPool::shutdown);
+      .doOnComplete(writerPool::shutdown)
+      .doOnComplete(metadataPool::shutdown);
   }
 
 }
