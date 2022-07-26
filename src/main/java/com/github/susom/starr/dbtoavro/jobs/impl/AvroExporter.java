@@ -8,7 +8,7 @@ import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.impl.FnFactory;
 import com.github.susom.starr.dbtoavro.jobs.Exporter;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import io.reactivex.Observable;
 import io.reactivex.schedulers.Schedulers;
 import java.util.concurrent.ExecutorService;
@@ -23,9 +23,9 @@ public class AvroExporter implements Exporter {
   private static final Logger LOGGER = LoggerFactory.getLogger(AvroExporter.class);
 
   private final Config config;
-  private DatabaseProviderRx.Builder dbb;
+  private DatabaseProvider.Builder dbb;
 
-  public AvroExporter(Config config, DatabaseProviderRx.Builder dbb) {
+  public AvroExporter(Config config, DatabaseProvider.Builder dbb) {
     this.config = config;
     this.dbb = dbb;
   }
@@ -35,6 +35,7 @@ public class AvroExporter implements Exporter {
 
     int threads = config.getIntegerOrThrow("threads");
     ExecutorService writerPool = Executors.newFixedThreadPool(threads);
+    ExecutorService metadataPool = Executors.newFixedThreadPool(threads);
     LOGGER.info("Starting export using {} threads", threads);
     final int maxRetryCount = 4;
     final int delay = 5;
@@ -44,7 +45,7 @@ public class AvroExporter implements Exporter {
         DatabaseFns dbFns = FnFactory.getDatabaseFns(database.flavor, config, dbb);
         return
           dbFns.getSchemas(job.catalog)
-            .filter(schema ->
+              .filter(schema ->
               job.schemas.isEmpty()
                 || job.schemas.stream().anyMatch(x -> x.equals(schema)))
             .flatMap(schema ->
@@ -63,21 +64,25 @@ public class AvroExporter implements Exporter {
                   .flatMap(query -> avroFns.saveAsAvro(query)
                     .subscribeOn(Schedulers.from(writerPool))
                     .toObservable()
+                    //.onErrorReturnItem(new AvroFile(query, false))
                     .retryWhen(errors -> //this retry is for saveAsAvro
                       errors
                             .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
-                            .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
+                            .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)) )
                       )
                   )
+                  .subscribeOn(Schedulers.from(metadataPool))
                   .retryWhen(errors -> //this retry is for getQueries
                     errors
                           .zipWith(Observable.range(1, maxRetryCount), (error, retryCount) -> retryCount)
-                          .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS))
-                    )
-              ));
+                          .flatMap(retryCount -> Observable.timer((long) Math.pow(delay, retryCount), TimeUnit.SECONDS, Schedulers.from(writerPool)))
+                   )
+                ,false, threads * 2) // don't make too many outstanding observables
+            );
         }
       )
-      .doOnComplete(writerPool::shutdown);
+      .doOnComplete(writerPool::shutdown)
+      .doOnComplete(metadataPool::shutdown);
   }
 
 }

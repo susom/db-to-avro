@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.susom</groupId>
   <artifactId>db-to-avro</artifactId>
-  <version>1.9-SNAPSHOT</version>
+  <version>2.0</version>
   <packaging>jar</packaging>
 
   <name>Starr Core Database To Avro Utility</name>
@@ -114,7 +114,7 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.12</version>
+      <version>4.13.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>

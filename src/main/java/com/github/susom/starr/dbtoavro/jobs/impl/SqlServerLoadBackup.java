@@ -18,13 +18,13 @@
 package com.github.susom.starr.dbtoavro.jobs.impl;
 
 import com.github.susom.database.Config;
+import com.github.susom.database.DatabaseProvider;
 import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.DockerFns;
 import com.github.susom.starr.dbtoavro.functions.impl.SqlServerDatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.impl.SqlServerDockerFns;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
 import io.reactivex.Completable;
 import io.reactivex.Single;
 import io.reactivex.schedulers.Schedulers;
@@ -48,7 +48,7 @@ public class SqlServerLoadBackup implements Loader {
   private Config config;
   private String containerId;
 
-  public SqlServerLoadBackup(Config config, DatabaseProviderRx.Builder dbb) {
+  public SqlServerLoadBackup(Config config, DatabaseProvider.Builder dbb) {
     this.config = config;
     this.db = new SqlServerDatabaseFns(config, dbb);
   }

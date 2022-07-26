@@ -6,14 +6,14 @@ import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.AvroFns;
 import com.github.susom.starr.dbtoavro.functions.DatabaseFns;
 import com.github.susom.starr.dbtoavro.functions.DockerFns;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 
 /**
  * Factory methods for retrieving implementations for each database vendor
  */
 public class FnFactory {
 
-  public static AvroFns getAvroFns(Flavor flav, Job job, DatabaseProviderRx.Builder dbb) {
+  public static AvroFns getAvroFns(Flavor flav, Job job, DatabaseProvider.Builder dbb) {
     switch (flav) {
       case sqlserver:
         return new SqlServerAvroFns(job, dbb);
@@ -24,7 +24,7 @@ public class FnFactory {
     }
   }
 
-  public static DatabaseFns getDatabaseFns(Flavor flav, Config config, DatabaseProviderRx.Builder dbb) {
+  public static DatabaseFns getDatabaseFns(Flavor flav, Config config, DatabaseProvider.Builder dbb) {
     switch (flav) {
       case sqlserver:
         return new SqlServerDatabaseFns(config, dbb);

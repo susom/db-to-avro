@@ -19,8 +19,12 @@
 package com.github.susom.starr.dbtoavro.entity;
 
 import com.github.susom.database.Flavor;
+
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Simple pojo for storing an immutable job definition
@@ -55,10 +59,10 @@ public class Job {
   public final List<SplitTableStrategy> splitTableStrategies;
   public final int incrementFactor;
 
-  public List<AvroFile> avro;
+  public transient List<AvroFile> avro;
   public long runtimeMs;
-  public List<String> excludeTableFilter;
-  public Map<String, List<AvroFile>> groupedAvro;
+  public List<Output> outputList;
+  public List<AvroFile> failedAvro;
 
   public Job(Builder builder) {
     this.id = builder.id;
@@ -88,6 +92,44 @@ public class Job {
     this.continueOnException = builder.continueOnException;
     this.splitTableStrategies = builder.splitTableStrategies;
     this.incrementFactor = builder.incrementFactor;
+  }
+
+  public void setOutputFromAvro(List<AvroFile> avroList) {
+    avro = avroList;
+    Map<String, List<AvroFile>> map = avro.stream().filter(w -> w.tableName != null).collect(Collectors.groupingBy(w -> w.tableName));
+    outputList = new ArrayList<Output>();
+    map.entrySet().stream().forEach(e -> {
+      Output output = new Output();
+      output.queries = new ArrayList<String>();
+      output.statisticsList = new ArrayList<Statistics>();
+      output.tableName = e.getKey();
+      List<AvroFile> data = e.getValue();
+      AvroFile af = data.get(0);
+      output.catalog = af.table.getCatalog();
+      output.schema = af.table.getSchema();
+      output.splitStrategies = af.table.getSplitStrategies();
+      //output.columns = af.table.getColumns();
+      output.dbRowCount = af.table.getDbRowCount();
+      output.tableQueryCount = af.table.getQueryCount();
+
+      output.exportRowCount = 0L;
+      output.filesCount = 0;
+      output.totalBytes = 0;
+      output.startTime = af.statistics.getStartTime();
+      output.endTime = af.statistics.getEndTime();
+
+      data.forEach(x -> {
+        output.queries.add(String.format("Id- %s: query- %s", x.queryId, x.query));
+        output.statisticsList.add(x.statistics);
+        output.exportRowCount += x.exportRowCount;
+        output.filesCount += x.files.size();
+        output.totalBytes += x.totalBytes;
+        output.startTime = (x.statistics.getStartTime().isBefore(output.startTime)) ? x.statistics.getStartTime() : output.startTime;
+        output.endTime = (x.statistics.getEndTime().isAfter(output.endTime)) ? x.statistics.getEndTime() : output.endTime;
+      });
+      output.timeTakenInSeconds = Duration.between(output.startTime, output.endTime).getSeconds();
+      outputList.add(output);
+    });
   }
 
   public static class Builder {

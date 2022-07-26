@@ -359,7 +359,7 @@ public class Main {
       }
       finalConfiguration.value("threads", String.valueOf(threads));
 
-      finalConfiguration.value("database.pool.size", String.valueOf(Math.round(threads + (threads * 0.1f))));
+      finalConfiguration.value("database.pool.size", String.valueOf(threads * 2));
 
       config = finalConfiguration.get();
 

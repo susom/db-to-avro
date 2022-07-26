@@ -2,13 +2,14 @@ package com.github.susom.starr.dbtoavro.entity;
 
 import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 
 public class Statistics {
 
   private String status;
-  private String table;
-  private int tableQueryCount;
+  private transient String table;
+  private transient int tableQueryCount;
   private String queryId;
   private int queryFileCount;
   private LocalDateTime startTime;
@@ -16,8 +17,9 @@ public class Statistics {
   private long timeTakenInSeconds;
   private long totalBytes;
   private long exportRowCount;
-  private Long dbRowCount;
-  private String query;
+  private transient Long dbRowCount;
+  private transient String query;
+  private List<String> files;
 
   public Statistics(String status, String table, int tableQueryCount, String queryId, int queryFileCount, LocalDateTime startTime, LocalDateTime endTime,
     long timeTakenInSeconds, long totalBytes, long exportRowCount, Long dbRowCount, String query) {
@@ -52,6 +54,21 @@ public class Statistics {
     this.startTime = startTime;
     this.dbRowCount = dbRowCount;
   }
+
+  public String getStatus() {return status;}
+  public String getTable() {return table;}
+  public int getTableQueryCount() {return tableQueryCount;}
+  public String getQueryId() {return queryId;}
+  public int getQueryFileCount() {return queryFileCount;}
+  public LocalDateTime getStartTime() {return startTime;}
+  public LocalDateTime getEndTime() {return endTime;}
+  public long getTimeTakenInSeconds() {return timeTakenInSeconds;}
+  public long getTotalBytes() {return totalBytes;}
+  public long getExportRowCount() {return exportRowCount;}
+  public Long getDbRowCount() {return dbRowCount;}
+  public String getQuery() {return query;}
+  public List<String> getFiles() {return files;}
+  public void setFiles(List<String> files) {this.files = files;}
 
   @Override
   public String toString() {

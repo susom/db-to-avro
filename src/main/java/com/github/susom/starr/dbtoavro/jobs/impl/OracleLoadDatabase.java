@@ -22,7 +22,7 @@ import com.github.susom.starr.dbtoavro.entity.Database;
 import com.github.susom.starr.dbtoavro.entity.Job;
 import com.github.susom.starr.dbtoavro.functions.impl.OracleDatabaseFns;
 import com.github.susom.starr.dbtoavro.jobs.Loader;
-import com.github.susom.starr.dbtoavro.util.DatabaseProviderRx;
+import com.github.susom.database.DatabaseProvider;
 import com.github.susom.starr.dbtoavro.util.RepeatWithDelay;
 import io.reactivex.Completable;
 import io.reactivex.Single;
@@ -38,7 +38,7 @@ public class OracleLoadDatabase implements Loader {
 
   private OracleDatabaseFns db;
 
-  public OracleLoadDatabase(Config config, DatabaseProviderRx.Builder dbb) {
+  public OracleLoadDatabase(Config config, DatabaseProvider.Builder dbb) {
     this.db = new OracleDatabaseFns(config, dbb);
   }
 
