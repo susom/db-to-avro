@@ -3,14 +3,18 @@
 The goal of this project is to load database backups (eg.
 Oracle datapump exports, MS Sql Server .bak files) into a temporary Docker container running the appropriate vendor database, and then export the tables within that restored database as .avro files for loading into other Big data systems.
 
-=== Current Progress
+At the present time (August 2022) this goal remains aspirational. The current system requires a pre-existing database, the connect string and credentials to which must be passed in on the command line.
+
+=== Current Functionality
+
+This jar file connects to an existing database and emits .avro files, one for each table in the database or as specified on the command line.
 
 MSSQL Server backups and Oracle Datapump exports are currently supported.
 Oracle supports row-level multi-threading for high performance.
 
 === Architecture
 
-On a host running docker, the application will instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
+On a host running docker, the application will (one day) instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
 If a database is already running, the restore step can be skipped by providing a JDBC connection string.
 
 The application is asynchronous and multi-threaded using https://github.com/ReactiveX/RxJava[RxJava2].
@@ -26,11 +30,13 @@ java -jar db-to-avro.jar \
    --backup-dir=backups/ \
    --backup-files=AdventureWorksDW2016_EXT.bak
    --catalog=AdventureWorks2016 \
-   --schemas=dbo \
+   --schema=dbo \
    --destination=avro/
 ----
 
-This will restore the Microsoft AdventureWorks database from a backup set located in `backups/`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
+This command currently produces an error message , "You must provide database.url".
+
+Once this project is complete, the above command will restore the Microsoft AdventureWorks database from a backup set located in `backups/`, using a single backup file `AdventureWorksDW2016_EXT.bak`.
 All tables within schema AdventureWorks2016.dbo will be exported as Avro files to the directory `avro/`
 
 Oracle
@@ -45,8 +51,15 @@ java -jar db-to-avro.jar \
    --destination=avro/
 ----
 
-This will restore the Oracle HR demo database from a backup set located in `backups/`, using a par file `HR.par`.
+Once this project is complete, this will restore the Oracle HR demo database from a backup set located in `backups/`, using a par file `HR.par`.
 All tables within schema HR will be exported as Avro files to the directory `avro/`
+
+To actually get the above two commands to work at this time, you must also supply the following on the command line as documented in the following section:
+----
+--connect=...
+--user=..
+--password=..
+----
 
 === Exporting an Existing Database
 
