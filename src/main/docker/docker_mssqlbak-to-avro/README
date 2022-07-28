@@ -1,0 +1,23 @@
+This docker produces avro files from a specified bak file.  The avro files are produced by first
+restoring the bak file to an mssql instance.  Please ensure that there is sufficient memory for the
+mssql instance as well as the bak file that is being restored.
+
+To use:
+1) Ensure that you have enough disk space for mssql instance + bak file restore.  Start with 50G for modest size backup.
+
+2) Update run_docker.sh with the following. The LOCAL_SRC and LOCAL_DEST directories will be mounted in the docker container.
+	- BAKFILE - name of bakfile without the path
+	- LOCAL_SRC - path to the BAKFILE
+	- LOCAL_DEST - directory for the avro files
+
+3) Copy db-to-avro-2.0.jar into this directory
+
+4) Run from this directory
+	sudo ./docker-run.sh
+
+5) To track progess
+	sudo docker logs mssqlbak_avro -f
+
+6) To dump container logs at the end
+	sudo docker logs mssqlbak_avro > $YOUR_LOGFILE
+
