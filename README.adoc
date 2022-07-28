@@ -14,7 +14,7 @@ Oracle supports row-level multi-threading for high performance.
 
 === Architecture
 
-On a host running docker, the application will instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
+On a host running docker, the application will (one day) instantiate a database (as a container), load the backup files into the container, and then dump the database as Avro files.
 If a database is already running, the restore step can be skipped by providing a JDBC connection string.
 
 The application is asynchronous and multi-threaded using https://github.com/ReactiveX/RxJava[RxJava2].
