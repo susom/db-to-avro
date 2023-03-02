@@ -74,6 +74,7 @@ public class OracleDatabaseFns extends DatabaseFns {
   private static Pattern startPattern = Pattern.compile("ROWID BETWEEN '(.*?)'");
   private static Pattern endPattern = Pattern.compile("' AND '(.*?)'");
   private int BATCH_SIZE = 100;
+  private static final String PARALLEL_HINT = "/*+ NO_PARALLEL */";
 
   public OracleDatabaseFns(Config config, Builder dbb) {
     super(config, dbb);
@@ -331,7 +332,8 @@ public class OracleDatabaseFns extends DatabaseFns {
                                   partialSql ->
                                       String.format(
                                           Locale.ROOT,
-                                          "SELECT %s FROM \"%s\".\"%s\" %s",
+                                          "SELECT %s %s FROM \"%s\".\"%s\" %s",
+                                          PARALLEL_HINT,
                                           columnSql,
                                           schema,
                                           tableName,
