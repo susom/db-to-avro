@@ -1,0 +1,1 @@
+* ({uri-jira}/STAR-6638[STAR-6638]) - Add NO_PARALLEL hint to db-to-avro
