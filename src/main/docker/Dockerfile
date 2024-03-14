@@ -1,4 +1,4 @@
-FROM openjdk:8
+FROM  eclipse-temurin:8-jdk-focal
 ENV HOME /app
 WORKDIR /app
 ADD target/db-to-avro-1.6-SNAPSHOT.jar /app/db-to-avro.jar
